@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Step 2 Study Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <h1>Step 2 CK</h1>
+            <p>Study Dashboard</p>
+        </div>
+        <ul class="nav-links">
+            <li><a href="#overview" class="nav-link active" data-section="overview">Overview</a></li>
+            <li><a href="#error-analysis" class="nav-link" data-section="error-analysis">Error Analysis</a></li>
+            <li><a href="#systems" class="nav-link" data-section="systems">Systems Breakdown</a></li>
+            <li><a href="#shelves" class="nav-link" data-section="shelves">Shelf Performance</a></li>
+            <li><a href="#trends" class="nav-link" data-section="trends">Trends & Insights</a></li>
+            <li><a href="#entries" class="nav-link" data-section="entries">All Entries</a></li>
+            <li><a href="#add-entry" class="nav-link" data-section="add-entry">+ Add Entry</a></li>
+        </ul>
+        <div class="sidebar-footer">
+            <button id="refresh-btn" class="btn btn-secondary">Refresh Data</button>
+            <p class="last-updated">Last updated: <span id="last-updated">--</span></p>
+        </div>
+    </nav>
+
+    <main class="content">
+        <!-- Overview Section -->
+        <section id="overview" class="section active">
+            <h2>Overview</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span class="stat-number" id="total-entries">--</span>
+                    <span class="stat-label">Total Missed Questions</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number" id="total-shelves">--</span>
+                    <span class="stat-label">Shelves Covered</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number" id="top-error-type">--</span>
+                    <span class="stat-label">Most Common Error</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number" id="weakest-system">--</span>
+                    <span class="stat-label">Weakest System</span>
+                </div>
+            </div>
+            <div class="chart-row">
+                <div class="chart-container">
+                    <h3>Errors by Type</h3>
+                    <canvas id="overview-error-chart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3>Entries by Shelf</h3>
+                    <canvas id="overview-shelf-chart"></canvas>
+                </div>
+            </div>
+            <div class="chart-row">
+                <div class="chart-container full-width">
+                    <h3>Missed Questions by System</h3>
+                    <canvas id="overview-system-chart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Error Analysis Section -->
+        <section id="error-analysis" class="section">
+            <h2>Error Analysis</h2>
+            <div class="chart-row">
+                <div class="chart-container">
+                    <h3>Error Type Distribution</h3>
+                    <canvas id="error-pie-chart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3>Error Types by Shelf</h3>
+                    <canvas id="error-by-shelf-chart"></canvas>
+                </div>
+            </div>
+            <div class="insight-cards" id="error-insights">
+                <!-- Populated by JS -->
+            </div>
+        </section>
+
+        <!-- Systems Breakdown Section -->
+        <section id="systems" class="section">
+            <h2>Systems Breakdown</h2>
+            <div class="chart-row">
+                <div class="chart-container full-width">
+                    <h3>Missed Questions per System</h3>
+                    <canvas id="system-bar-chart"></canvas>
+                </div>
+            </div>
+            <div class="chart-row">
+                <div class="chart-container full-width">
+                    <h3>Error Types Within Each System</h3>
+                    <canvas id="system-error-heatmap"></canvas>
+                </div>
+            </div>
+            <div class="insight-cards" id="system-insights">
+                <!-- Populated by JS -->
+            </div>
+        </section>
+
+        <!-- Shelf Performance Section -->
+        <section id="shelves" class="section">
+            <h2>Shelf Performance</h2>
+            <div class="chart-row">
+                <div class="chart-container">
+                    <h3>Questions Missed per Shelf</h3>
+                    <canvas id="shelf-bar-chart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3>Shelf Error Profile</h3>
+                    <canvas id="shelf-radar-chart"></canvas>
+                </div>
+            </div>
+            <div class="shelf-selector">
+                <label for="shelf-select">Select Shelf:</label>
+                <select id="shelf-select">
+                    <option value="all">All Shelves</option>
+                </select>
+            </div>
+            <div class="chart-row">
+                <div class="chart-container full-width">
+                    <h3>Systems Breakdown for Selected Shelf</h3>
+                    <canvas id="shelf-systems-chart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Trends & Insights Section -->
+        <section id="trends" class="section">
+            <h2>Trends & Insights</h2>
+            <div class="trends-summary">
+                <div class="trend-card priority-high">
+                    <h3>High Priority Focus Areas</h3>
+                    <ul id="high-priority-list">
+                        <!-- Populated by JS -->
+                    </ul>
+                </div>
+                <div class="trend-card priority-medium">
+                    <h3>Recurring Patterns</h3>
+                    <ul id="pattern-list">
+                        <!-- Populated by JS -->
+                    </ul>
+                </div>
+                <div class="trend-card priority-low">
+                    <h3>Strategy Recommendations</h3>
+                    <ul id="strategy-list">
+                        <!-- Populated by JS -->
+                    </ul>
+                </div>
+            </div>
+            <div class="chart-row">
+                <div class="chart-container full-width">
+                    <h3>Error Type vs System Heatmap</h3>
+                    <canvas id="heatmap-chart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- All Entries Section -->
+        <section id="entries" class="section">
+            <h2>All Entries</h2>
+            <div class="filters">
+                <select id="filter-shelf">
+                    <option value="">All Shelves</option>
+                </select>
+                <select id="filter-system">
+                    <option value="">All Systems</option>
+                </select>
+                <select id="filter-error">
+                    <option value="">All Error Types</option>
+                </select>
+                <input type="text" id="filter-search" placeholder="Search topics, notes...">
+            </div>
+            <div class="table-wrapper">
+                <table id="entries-table">
+                    <thead>
+                        <tr>
+                            <th>Shelf</th>
+                            <th>System</th>
+                            <th>Category</th>
+                            <th>Topic</th>
+                            <th>Error Type</th>
+                            <th>Notes</th>
+                            <th>Strategy</th>
+                        </tr>
+                    </thead>
+                    <tbody id="entries-tbody">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+            <p class="entry-count">Showing <span id="showing-count">0</span> of <span id="total-count">0</span> entries</p>
+        </section>
+
+        <!-- Add Entry Section -->
+        <section id="add-entry" class="section">
+            <h2>Add New Entry</h2>
+            <form id="entry-form">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="form-shelf">Shelf *</label>
+                        <select id="form-shelf" required>
+                            <option value="">Select Shelf</option>
+                            <option value="IM">IM - Internal Medicine</option>
+                            <option value="FM">FM - Family Medicine</option>
+                            <option value="EM">EM - Emergency Medicine</option>
+                            <option value="PED">PED - Pediatrics</option>
+                            <option value="OB">OB - Obstetrics</option>
+                            <option value="AMB">AMB - Ambulatory</option>
+                            <option value="SURG">SURG - Surgery</option>
+                            <option value="PSYCH">PSYCH - Psychiatry</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="form-system">System *</label>
+                        <select id="form-system" required>
+                            <option value="">Select System</option>
+                            <option value="Nervous system">Nervous System</option>
+                            <option value="Pulmonary and critical care">Pulmonary & Critical Care</option>
+                            <option value="Gastrointestinal and Nutrition">GI & Nutrition</option>
+                            <option value="Renal, Urinary systems and electrolytes">Renal & Electrolytes</option>
+                            <option value="Endocrine, Diabetes and metabolism">Endocrine & Metabolism</option>
+                            <option value="Cardiovascular System">Cardiovascular</option>
+                            <option value="Hematology and Oncology">Hematology & Oncology</option>
+                            <option value="Infectious diseases">Infectious Diseases</option>
+                            <option value="Rheumatology / Orthopedics and Sports">Rheumatology & Ortho</option>
+                            <option value="Allergy and Immunology">Allergy & Immunology</option>
+                            <option value="Dermatology">Dermatology</option>
+                            <option value="Ear, nose, throat (ENT)">ENT</option>
+                            <option value="Male Reproductive System">Male Reproductive</option>
+                            <option value="Social Sciences (Ethics/Legal/Prof)">Social Sciences</option>
+                            <option value="Poisening and environmental exposure">Poisoning & Environmental</option>
+                            <option value="pregnancy, Childbirth & Puerperium">Pregnancy & Childbirth</option>
+                            <option value="Miscellaneous">Miscellaneous</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="form-category">Category *</label>
+                        <input type="text" id="form-category" required placeholder="e.g., Demyelinating Diseases">
+                    </div>
+                    <div class="form-group">
+                        <label for="form-topic">Topic *</label>
+                        <input type="text" id="form-topic" required placeholder="e.g., Multiple Sclerosis">
+                    </div>
+                    <div class="form-group">
+                        <label for="form-error">Why I Missed It *</label>
+                        <select id="form-error" required>
+                            <option value="">Select Error Type</option>
+                            <option value="Knowledge gap">Knowledge Gap</option>
+                            <option value="Anchoring Bias">Anchoring Bias</option>
+                            <option value="Premature conclusion">Premature Conclusion</option>
+                            <option value="Hidden Hook Failure">Hidden Hook Failure</option>
+                            <option value="Right map / wrong order">Right Map / Wrong Order</option>
+                            <option value="Wrong Algorithm">Wrong Algorithm</option>
+                            <option value="Dumb mistake">Dumb Mistake</option>
+                            <option value="Misunderstood vinnet">Misunderstood Vignette</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group full">
+                    <label for="form-notes">Notes</label>
+                    <textarea id="form-notes" rows="3" placeholder="What happened? What did you miss?"></textarea>
+                </div>
+                <div class="form-group full">
+                    <label for="form-strategy">Strategy to Correct It</label>
+                    <textarea id="form-strategy" rows="3" placeholder="How will you avoid this next time?"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary" id="submit-btn">Add Entry</button>
+                    <button type="reset" class="btn btn-secondary">Clear</button>
+                </div>
+                <div id="form-message" class="form-message"></div>
+            </form>
+        </section>
+    </main>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
