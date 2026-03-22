@@ -4,6 +4,7 @@
 
 const SHEET_ID = 'REDACTED_SHEET_ID';
 const SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
+const TRACKER_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=IM%20Tracker`;
 
 let APPS_SCRIPT_URL = localStorage.getItem('appsScriptUrl') || '';
 
@@ -45,6 +46,7 @@ const ERROR_WEIGHTS = {
 };
 
 let rawData = [];
+let trackerData = [];
 let charts = {};
 
 // ============================================================
@@ -109,6 +111,32 @@ async function fetchData() {
                 notes: (row[5] || '').trim(),
                 strategy: (row[6] || '').trim(),
             }));
+
+        // Fetch IM Tracker (second tab)
+        try {
+            const trackerResp = await fetch(TRACKER_CSV_URL);
+            if (trackerResp.ok) {
+                const trackerCsv = await trackerResp.text();
+                const trackerRows = parseCSV(trackerCsv);
+                trackerData = trackerRows.slice(1)
+                    .filter(row => row[0] && row[0].trim() && row[1] && row[1].trim())
+                    .map(row => {
+                        const pctStr = (row[2] || '').replace('%', '').trim();
+                        const pct = pctStr && pctStr !== '—' ? parseFloat(pctStr) : null;
+                        const qCompleted = parseInt(row[1]) || 0;
+                        const qRemaining = parseInt(row[3]) || 0;
+                        return {
+                            date: (row[0] || '').trim(),
+                            qCompleted,
+                            pctCorrect: pct,
+                            qRemaining,
+                        };
+                    })
+                    .filter(r => r.qCompleted > 0); // skip zero/rest days for charting
+            }
+        } catch (e) {
+            console.warn('Could not fetch IM Tracker:', e);
+        }
 
         document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
         return rawData;
@@ -206,6 +234,7 @@ const CHART_DEFAULTS = {
 // Section display names for the content header
 const SECTION_NAMES = {
     'study-today': 'What to Study Today',
+    'im-tracker': 'IM Progress Tracker',
     'overview': 'Overview',
     'pareto': 'Pareto Analysis',
     'error-analysis': 'Error Analysis',
@@ -270,6 +299,7 @@ function renderSection(sectionId) {
 
     switch (sectionId) {
         case 'study-today': renderStudyToday(); break;
+        case 'im-tracker': renderIMTracker(); break;
         case 'overview': renderOverview(); break;
         case 'pareto': renderPareto(); break;
         case 'error-analysis': renderErrorAnalysis(); break;
@@ -361,6 +391,188 @@ function renderStudyToday() {
             <td>${[...t.errors].map(e => `<span class="error-badge ${getErrorBadgeClass(e)}">${e}</span>`).join(' ')}</td>
         </tr>
     `).join('') || '<tr><td colspan="4" style="text-align:center;color:#64748b;">No repeat topics yet</td></tr>';
+}
+
+// ============================================================
+// IM PROGRESS TRACKER
+// ============================================================
+
+function renderIMTracker() {
+    if (!trackerData.length) return;
+
+    const labels = trackerData.map(d => d.date);
+    const scores = trackerData.map(d => d.pctCorrect);
+    const qPerDay = trackerData.map(d => d.qCompleted);
+    const remaining = trackerData.map(d => d.qRemaining);
+
+    // Compute cumulative questions done
+    let cumulative = 0;
+    const cumulativeData = trackerData.map(d => { cumulative += d.qCompleted; return cumulative; });
+
+    // 7-day rolling average of % correct
+    const rollingAvg = scores.map((_, i) => {
+        const window = scores.slice(Math.max(0, i - 6), i + 1).filter(v => v !== null);
+        return window.length > 0 ? (window.reduce((a, b) => a + b, 0) / window.length) : null;
+    });
+
+    // Stats
+    const totalQ = cumulativeData[cumulativeData.length - 1] || 0;
+    const validScores = scores.filter(v => v !== null);
+    const avgScore = validScores.length ? (validScores.reduce((a, b) => a + b, 0) / validScores.length).toFixed(1) : '--';
+    const bestDay = Math.max(...qPerDay);
+    const avgQPerDay = (totalQ / trackerData.length).toFixed(1);
+    const lastRemaining = trackerData[trackerData.length - 1]?.qRemaining ?? '--';
+    const recentScores = validScores.slice(-7);
+    const recentAvg = recentScores.length ? (recentScores.reduce((a, b) => a + b, 0) / recentScores.length).toFixed(1) : '--';
+    const earlyScores = validScores.slice(0, 7);
+    const earlyAvg = earlyScores.length ? (earlyScores.reduce((a, b) => a + b, 0) / earlyScores.length).toFixed(1) : '--';
+
+    document.getElementById('tracker-total-q').textContent = totalQ;
+    document.getElementById('tracker-avg-score').textContent = avgScore + '%';
+    document.getElementById('tracker-avg-qday').textContent = avgQPerDay;
+    document.getElementById('tracker-best-day').textContent = bestDay;
+    document.getElementById('tracker-remaining').textContent = lastRemaining;
+    document.getElementById('tracker-recent-avg').textContent = recentAvg + '%';
+    document.getElementById('tracker-trend-dir').textContent =
+        parseFloat(recentAvg) > parseFloat(earlyAvg) ? 'Improving' :
+        parseFloat(recentAvg) < parseFloat(earlyAvg) ? 'Declining' : 'Stable';
+    document.getElementById('tracker-trend-dir').style.color =
+        parseFloat(recentAvg) > parseFloat(earlyAvg) ? COLORS.green :
+        parseFloat(recentAvg) < parseFloat(earlyAvg) ? COLORS.red : COLORS.yellow;
+    document.getElementById('tracker-early-avg').textContent = `First 7 days: ${earlyAvg}% → Last 7 days: ${recentAvg}%`;
+
+    // Score over time chart (line + rolling avg)
+    destroyChart('trackerScore');
+    charts.trackerScore = new Chart(document.getElementById('tracker-score-chart'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: '% Correct',
+                    data: scores,
+                    borderColor: COLORS.blue,
+                    backgroundColor: COLORS.blue + '20',
+                    pointRadius: 3,
+                    pointBackgroundColor: COLORS.blue,
+                    borderWidth: 2,
+                    fill: true,
+                    spanGaps: true,
+                },
+                {
+                    label: '7-Day Rolling Avg',
+                    data: rollingAvg,
+                    borderColor: COLORS.yellow,
+                    borderWidth: 2,
+                    borderDash: [6, 3],
+                    pointRadius: 0,
+                    fill: false,
+                    spanGaps: true,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom', labels: { color: CHART_DEFAULTS.textColor } },
+                tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.raw !== null ? ctx.raw.toFixed(1) + '%' : 'Rest day'}` } }
+            },
+            scales: {
+                x: { ticks: { color: CHART_DEFAULTS.textColor, maxRotation: 45, maxTicksLimit: 15 }, grid: { display: false } },
+                y: { min: 30, max: 100, ticks: { color: CHART_DEFAULTS.textColor, callback: v => v + '%' }, grid: { color: CHART_DEFAULTS.gridColor } }
+            }
+        }
+    });
+
+    // Questions per day bar chart
+    destroyChart('trackerQPerDay');
+    charts.trackerQPerDay = new Chart(document.getElementById('tracker-qperday-chart'), {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Questions Completed',
+                data: qPerDay,
+                backgroundColor: qPerDay.map(q => q >= 40 ? COLORS.green : q >= 20 ? COLORS.blue : COLORS.yellow),
+                borderRadius: 3,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { ticks: { color: CHART_DEFAULTS.textColor, maxRotation: 45, maxTicksLimit: 15 }, grid: { display: false } },
+                y: { ticks: { color: CHART_DEFAULTS.textColor }, grid: { color: CHART_DEFAULTS.gridColor } }
+            }
+        }
+    });
+
+    // Cumulative progress + remaining
+    destroyChart('trackerCumulative');
+    charts.trackerCumulative = new Chart(document.getElementById('tracker-cumulative-chart'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Questions Completed (Cumulative)',
+                    data: cumulativeData,
+                    borderColor: COLORS.green,
+                    backgroundColor: COLORS.green + '15',
+                    borderWidth: 2,
+                    fill: true,
+                    pointRadius: 2,
+                },
+                {
+                    label: 'Questions Remaining',
+                    data: remaining,
+                    borderColor: COLORS.red,
+                    backgroundColor: COLORS.red + '10',
+                    borderWidth: 2,
+                    fill: true,
+                    pointRadius: 2,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom', labels: { color: CHART_DEFAULTS.textColor } } },
+            scales: {
+                x: { ticks: { color: CHART_DEFAULTS.textColor, maxRotation: 45, maxTicksLimit: 15 }, grid: { display: false } },
+                y: { ticks: { color: CHART_DEFAULTS.textColor }, grid: { color: CHART_DEFAULTS.gridColor } }
+            }
+        }
+    });
+
+    // Score vs Volume scatter
+    const scatterData = trackerData
+        .filter(d => d.pctCorrect !== null)
+        .map(d => ({ x: d.qCompleted, y: d.pctCorrect }));
+
+    destroyChart('trackerScatter');
+    charts.trackerScatter = new Chart(document.getElementById('tracker-scatter-chart'), {
+        type: 'scatter',
+        data: {
+            datasets: [{
+                label: 'Score vs Volume',
+                data: scatterData,
+                backgroundColor: COLORS.purple + '80',
+                borderColor: COLORS.purple,
+                pointRadius: 5,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => `${ctx.raw.x} questions → ${ctx.raw.y}% correct` } }
+            },
+            scales: {
+                x: { title: { display: true, text: 'Questions/Day', color: CHART_DEFAULTS.textColor }, ticks: { color: CHART_DEFAULTS.textColor }, grid: { color: CHART_DEFAULTS.gridColor } },
+                y: { title: { display: true, text: '% Correct', color: CHART_DEFAULTS.textColor }, min: 30, max: 100, ticks: { color: CHART_DEFAULTS.textColor, callback: v => v + '%' }, grid: { color: CHART_DEFAULTS.gridColor } }
+            }
+        }
+    });
 }
 
 // ============================================================
