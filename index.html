@@ -4,10 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Step 2 CK Study Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 </head>
 <body>
+
+    <!-- Loading overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-spinner"></div>
+        <p class="loading-text">Loading study data...</p>
+        <div class="loading-skeleton">
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
+        </div>
+    </div>
+
     <nav class="sidebar">
         <div class="sidebar-header">
             <h1>Step 2 CK</h1>
@@ -33,13 +48,19 @@
 
     <main class="content">
 
+        <!-- Sticky header bar -->
+        <div class="content-header">
+            <h1 id="content-header-title">What to Study Today</h1>
+            <span class="header-meta" id="content-header-meta"></span>
+        </div>
+
         <!-- WHAT TO STUDY TODAY -->
         <section id="study-today" class="section active">
             <h2>What to Study Today</h2>
             <p class="section-subtitle">Your highest-impact study targets based on data analysis</p>
 
             <div class="study-today-grid">
-                <div class="study-card priority-high">
+                <div class="study-card priority-high animate-in">
                     <div class="study-card-header">
                         <span class="priority-label">PRIORITY 1</span>
                         <span class="priority-tag">Content Review</span>
@@ -48,7 +69,7 @@
                     <p id="today-p1-desc">--</p>
                     <div class="study-card-meta" id="today-p1-meta"></div>
                 </div>
-                <div class="study-card priority-medium">
+                <div class="study-card priority-medium animate-in">
                     <div class="study-card-header">
                         <span class="priority-label">PRIORITY 2</span>
                         <span class="priority-tag">Technique</span>
@@ -57,7 +78,7 @@
                     <p id="today-p2-desc">--</p>
                     <div class="study-card-meta" id="today-p2-meta"></div>
                 </div>
-                <div class="study-card priority-low">
+                <div class="study-card priority-low animate-in">
                     <div class="study-card-header">
                         <span class="priority-label">PRIORITY 3</span>
                         <span class="priority-tag">Quick Wins</span>
@@ -70,7 +91,7 @@
 
             <h3 class="subsection-title">Study Priority Score (Weighted Ranking)</h3>
             <p class="section-subtitle">Higher score = higher impact. Weighted by error severity: Knowledge Gaps &amp; Wrong Algorithms count 3x, cognitive biases 1.5x, dumb mistakes 0.5x</p>
-            <div class="table-wrapper">
+            <div class="table-wrapper animate-in">
                 <table id="priority-table">
                     <thead>
                         <tr>
@@ -88,7 +109,7 @@
 
             <h3 class="subsection-title">Repeat Topic Offenders</h3>
             <p class="section-subtitle">Topics that appear 2+ times — your highest-yield review targets</p>
-            <div class="table-wrapper">
+            <div class="table-wrapper animate-in">
                 <table id="repeat-quick-table">
                     <thead>
                         <tr>
@@ -107,31 +128,31 @@
         <section id="overview" class="section">
             <h2>Overview</h2>
             <div class="stats-grid">
-                <div class="stat-card">
+                <div class="stat-card animate-in">
                     <span class="stat-number" id="total-entries">--</span>
                     <span class="stat-label">Total Missed Questions</span>
                 </div>
-                <div class="stat-card stat-highlight-red">
+                <div class="stat-card stat-highlight-red animate-in">
                     <span class="stat-number" id="knowledge-gap-ratio">--</span>
                     <span class="stat-label">Knowledge Gap Ratio</span>
                     <span class="stat-hint">% of misses from not knowing content</span>
                 </div>
-                <div class="stat-card stat-highlight-yellow">
+                <div class="stat-card stat-highlight-yellow animate-in">
                     <span class="stat-number" id="cognitive-error-rate">--</span>
                     <span class="stat-label">Cognitive Error Rate</span>
                     <span class="stat-hint">% of misses from reasoning mistakes</span>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card animate-in">
                     <span class="stat-number" id="repeat-topic-count">--</span>
                     <span class="stat-label">Repeat Topics</span>
                     <span class="stat-hint">Topics missed 2+ times</span>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card animate-in">
                     <span class="stat-number" id="pareto-threshold">--</span>
                     <span class="stat-label">Pareto Systems</span>
                     <span class="stat-hint">Systems causing 80% of misses</span>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card animate-in">
                     <span class="stat-number" id="weakest-shelf-stat">--</span>
                     <span class="stat-label">Weakest Shelf</span>
                     <span class="stat-hint" id="weakest-shelf-detail"></span>
@@ -139,21 +160,21 @@
             </div>
 
             <div class="chart-row">
-                <div class="chart-container">
+                <div class="chart-container animate-in">
                     <h3>Knowledge vs Reasoning Errors</h3>
                     <canvas id="knowledge-vs-reasoning-chart"></canvas>
                 </div>
-                <div class="chart-container">
+                <div class="chart-container animate-in">
                     <h3>Entries by Shelf</h3>
                     <canvas id="overview-shelf-chart"></canvas>
                 </div>
             </div>
             <div class="chart-row">
-                <div class="chart-container">
+                <div class="chart-container animate-in">
                     <h3>Error Type Distribution</h3>
                     <canvas id="overview-error-chart"></canvas>
                 </div>
-                <div class="chart-container">
+                <div class="chart-container animate-in">
                     <h3>Knowledge vs Reasoning by Shelf</h3>
                     <canvas id="kv-reasoning-shelf-chart"></canvas>
                 </div>
@@ -166,13 +187,13 @@
             <p class="section-subtitle">Which systems and categories cause the majority of your misses?</p>
 
             <div class="chart-row">
-                <div class="chart-container full-width">
+                <div class="chart-container full-width animate-in">
                     <h3>Systems — Cumulative Impact</h3>
                     <canvas id="pareto-system-chart"></canvas>
                 </div>
             </div>
             <div class="chart-row">
-                <div class="chart-container full-width">
+                <div class="chart-container full-width animate-in">
                     <h3>Categories — Cumulative Impact</h3>
                     <canvas id="pareto-category-chart"></canvas>
                 </div>
@@ -184,18 +205,18 @@
             <h2>Error Analysis</h2>
 
             <div class="chart-row">
-                <div class="chart-container">
+                <div class="chart-container animate-in">
                     <h3>Error Type Distribution</h3>
                     <canvas id="error-pie-chart"></canvas>
                 </div>
-                <div class="chart-container">
+                <div class="chart-container animate-in">
                     <h3>Error Types per Shelf (100% Stacked)</h3>
                     <canvas id="error-by-shelf-chart"></canvas>
                 </div>
             </div>
 
             <div class="chart-row">
-                <div class="chart-container full-width">
+                <div class="chart-container full-width animate-in">
                     <h3>Error Type vs System Heatmap</h3>
                     <div class="heatmap-wrapper" id="heatmap-container">
                         <!-- Rendered as HTML grid -->
@@ -211,7 +232,7 @@
             <h2>Systems Breakdown</h2>
 
             <div class="chart-row">
-                <div class="chart-container full-width">
+                <div class="chart-container full-width animate-in">
                     <h3>Missed Questions per System (with Error Type Breakdown)</h3>
                     <canvas id="system-stacked-chart"></canvas>
                 </div>
@@ -225,11 +246,11 @@
             </div>
             <div id="system-drilldown-container" style="display:none;">
                 <div class="chart-row">
-                    <div class="chart-container">
+                    <div class="chart-container animate-in">
                         <h3>Categories within <span id="drilldown-system-name"></span></h3>
                         <canvas id="system-category-chart"></canvas>
                     </div>
-                    <div class="chart-container">
+                    <div class="chart-container animate-in">
                         <h3>Error Types in <span id="drilldown-system-name2"></span></h3>
                         <canvas id="system-drilldown-error-chart"></canvas>
                     </div>
@@ -257,7 +278,7 @@
         <section id="shelves" class="section">
             <h2>Shelf Performance</h2>
             <div class="chart-row">
-                <div class="chart-container full-width">
+                <div class="chart-container full-width animate-in">
                     <h3>Questions Missed per Shelf (100% Error Profile)</h3>
                     <canvas id="shelf-100-stacked-chart"></canvas>
                 </div>
@@ -272,7 +293,7 @@
                 </select>
             </div>
             <div class="chart-row">
-                <div class="chart-container full-width">
+                <div class="chart-container full-width animate-in">
                     <h3>Systems Breakdown for Selected Shelf</h3>
                     <canvas id="shelf-systems-chart"></canvas>
                 </div>
@@ -285,13 +306,13 @@
             <p class="section-subtitle">Topics missed more than once — your highest-yield review targets</p>
 
             <div class="chart-row">
-                <div class="chart-container full-width">
+                <div class="chart-container full-width animate-in">
                     <h3>Topics Missed 2+ Times</h3>
                     <canvas id="repeat-topics-chart"></canvas>
                 </div>
             </div>
 
-            <div class="table-wrapper">
+            <div class="table-wrapper animate-in">
                 <table id="repeat-topics-table">
                     <thead>
                         <tr>
@@ -312,15 +333,15 @@
         <section id="trends" class="section">
             <h2>Trends & Insights</h2>
             <div class="trends-summary">
-                <div class="trend-card priority-high">
+                <div class="trend-card priority-high animate-in">
                     <h3>High Priority Focus Areas</h3>
                     <ul id="high-priority-list"></ul>
                 </div>
-                <div class="trend-card priority-medium">
+                <div class="trend-card priority-medium animate-in">
                     <h3>Recurring Patterns</h3>
                     <ul id="pattern-list"></ul>
                 </div>
-                <div class="trend-card priority-low">
+                <div class="trend-card priority-low animate-in">
                     <h3>Strategy Recommendations</h3>
                     <ul id="strategy-list"></ul>
                 </div>

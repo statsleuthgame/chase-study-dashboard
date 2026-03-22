@@ -200,12 +200,68 @@ function getRepeatTopics() {
 
 const CHART_DEFAULTS = {
     textColor: '#94a3b8',
-    gridColor: '#334155',
+    gridColor: '#1e3048',
 };
+
+// Section display names for the content header
+const SECTION_NAMES = {
+    'study-today': 'What to Study Today',
+    'overview': 'Overview',
+    'pareto': 'Pareto Analysis',
+    'error-analysis': 'Error Analysis',
+    'systems': 'Systems Breakdown',
+    'shelves': 'Shelf Performance',
+    'repeat-topics': 'Repeat Topics',
+    'trends': 'Trends & Insights',
+    'entries': 'All Entries',
+    'add-entry': 'Add New Entry',
+};
+
+// ============================================================
+// Intersection Observer for scroll-in animations
+// ============================================================
+
+const animationObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+        }
+    });
+}, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+
+function observeAnimations() {
+    document.querySelectorAll('.animate-in').forEach(el => {
+        el.classList.remove('visible');
+        animationObserver.observe(el);
+    });
+}
+
+// ============================================================
+// Loading overlay
+// ============================================================
+
+function hideLoading() {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) overlay.classList.add('hidden');
+}
+
+function showLoading() {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) overlay.classList.remove('hidden');
+}
 
 // ============================================================
 // Navigation
 // ============================================================
+
+function updateContentHeader(sectionId) {
+    const headerTitle = document.getElementById('content-header-title');
+    const headerMeta = document.getElementById('content-header-meta');
+    if (headerTitle) headerTitle.textContent = SECTION_NAMES[sectionId] || '';
+    if (headerMeta && rawData.length > 0) {
+        headerMeta.textContent = `${rawData.length} total entries tracked`;
+    }
+}
 
 document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
@@ -215,6 +271,11 @@ document.querySelectorAll('.nav-link').forEach(link => {
         document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
         document.getElementById(section).classList.add('active');
         link.classList.add('active');
+        updateContentHeader(section);
+        // Re-trigger entrance animations for the new section
+        setTimeout(observeAnimations, 50);
+        // Scroll content to top
+        document.querySelector('.content').scrollTo({ top: 0, behavior: 'smooth' });
     });
 });
 
@@ -282,7 +343,7 @@ function renderStudyToday() {
             <td><strong>${i + 1}</strong></td>
             <td>${s.system}</td>
             <td>${s.total}</td>
-            <td><div class="score-bar"><div class="score-bar-fill" style="width:${pct}%;background:${pct > 66 ? COLORS.red : pct > 33 ? COLORS.yellow : COLORS.green}"></div><span class="score-bar-value">${s.score.toFixed(0)}</span></div></td>
+            <td><div class="score-bar"><div class="score-bar-track"><div class="score-bar-fill" style="width:${pct}%;background:${pct > 66 ? COLORS.red : pct > 33 ? COLORS.yellow : COLORS.green}"></div></div><span class="score-bar-value">${s.score.toFixed(0)}</span></div></td>
             <td><span class="error-badge ${getErrorBadgeClass(s.dominantError[0])}">${s.dominantError[0]}</span></td>
             <td>${action}</td>
         </tr>`;
@@ -1165,8 +1226,10 @@ document.getElementById('refresh-btn').addEventListener('click', async () => {
     const btn = document.getElementById('refresh-btn');
     btn.textContent = 'Loading...';
     btn.disabled = true;
+    showLoading();
     await fetchData();
     renderAll();
+    hideLoading();
     btn.textContent = 'Refresh Data';
     btn.disabled = false;
 });
@@ -1182,9 +1245,13 @@ function renderAll() {
     renderTrends();
     populateFilters();
     renderEntries();
+    updateContentHeader('study-today');
+    // Kick off scroll-in animations
+    setTimeout(observeAnimations, 100);
 }
 
 (async function init() {
     await fetchData();
     if (rawData.length > 0) renderAll();
+    hideLoading();
 })();
