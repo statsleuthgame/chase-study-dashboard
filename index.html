@@ -452,82 +452,122 @@
         <!-- ADD ENTRY -->
         <section id="add-entry" class="section">
             <h2>Add New Entry</h2>
-            <form id="entry-form">
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label for="form-shelf">Shelf *</label>
-                        <select id="form-shelf" required>
-                            <option value="">Select Shelf</option>
-                            <option value="IM">IM - Internal Medicine</option>
-                            <option value="FM">FM - Family Medicine</option>
-                            <option value="EM">EM - Emergency Medicine</option>
-                            <option value="PED">PED - Pediatrics</option>
-                            <option value="OB">OB - Obstetrics</option>
-                            <option value="AMB">AMB - Ambulatory</option>
-                            <option value="SURG">SURG - Surgery</option>
-                            <option value="PSYCH">PSYCH - Psychiatry</option>
-                        </select>
+
+            <div class="form-tabs">
+                <button class="form-tab active" data-form="missed-question">Missed Question</button>
+                <button class="form-tab" data-form="im-tracker-entry">IM Tracker</button>
+            </div>
+
+            <!-- MISSED QUESTION FORM -->
+            <div id="form-missed-question" class="form-panel active">
+                <p class="section-subtitle">Log a missed question to the Lessons Learned Journal</p>
+                <form id="entry-form">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="form-shelf">Shelf *</label>
+                            <select id="form-shelf" required>
+                                <option value="">Select Shelf</option>
+                                <option value="IM">IM - Internal Medicine</option>
+                                <option value="FM">FM - Family Medicine</option>
+                                <option value="EM">EM - Emergency Medicine</option>
+                                <option value="PED">PED - Pediatrics</option>
+                                <option value="OB">OB - Obstetrics</option>
+                                <option value="AMB">AMB - Ambulatory</option>
+                                <option value="SURG">SURG - Surgery</option>
+                                <option value="PSYCH">PSYCH - Psychiatry</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="form-system">System *</label>
+                            <select id="form-system" required>
+                                <option value="">Select System</option>
+                                <option value="Nervous system">Nervous System</option>
+                                <option value="Pulmonary and critical care">Pulmonary & Critical Care</option>
+                                <option value="Gastrointestinal and Nutrition">GI & Nutrition</option>
+                                <option value="Renal, Urinary systems and electrolytes">Renal & Electrolytes</option>
+                                <option value="Endocrine, Diabetes and metabolism">Endocrine & Metabolism</option>
+                                <option value="Cardiovascular System">Cardiovascular</option>
+                                <option value="Hematology and Oncology">Hematology & Oncology</option>
+                                <option value="Infectious diseases">Infectious Diseases</option>
+                                <option value="Rheumatology / Orthopedics and Sports">Rheumatology & Ortho</option>
+                                <option value="Allergy and Immunology">Allergy & Immunology</option>
+                                <option value="Dermatology">Dermatology</option>
+                                <option value="Ear, nose, throat (ENT)">ENT</option>
+                                <option value="Male Reproductive System">Male Reproductive</option>
+                                <option value="Social Sciences (Ethics/Legal/Prof)">Social Sciences</option>
+                                <option value="Poisening and environmental exposure">Poisoning & Environmental</option>
+                                <option value="pregnancy, Childbirth & Puerperium">Pregnancy & Childbirth</option>
+                                <option value="Miscellaneous">Miscellaneous</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="form-category">Category *</label>
+                            <input type="text" id="form-category" required placeholder="e.g., Demyelinating Diseases">
+                        </div>
+                        <div class="form-group">
+                            <label for="form-topic">Topic *</label>
+                            <input type="text" id="form-topic" required placeholder="e.g., Multiple Sclerosis">
+                        </div>
+                        <div class="form-group">
+                            <label for="form-error">Why I Missed It *</label>
+                            <select id="form-error" required>
+                                <option value="">Select Error Type</option>
+                                <option value="Knowledge gap">Knowledge Gap</option>
+                                <option value="Anchoring Bias">Anchoring Bias</option>
+                                <option value="Premature conclusion">Premature Conclusion</option>
+                                <option value="Hidden Hook Failure">Hidden Hook Failure</option>
+                                <option value="Right map / wrong order">Right Map / Wrong Order</option>
+                                <option value="Wrong Algorithm">Wrong Algorithm</option>
+                                <option value="Dumb mistake">Dumb Mistake</option>
+                                <option value="Misunderstood vinnet">Misunderstood Vignette</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="form-system">System *</label>
-                        <select id="form-system" required>
-                            <option value="">Select System</option>
-                            <option value="Nervous system">Nervous System</option>
-                            <option value="Pulmonary and critical care">Pulmonary & Critical Care</option>
-                            <option value="Gastrointestinal and Nutrition">GI & Nutrition</option>
-                            <option value="Renal, Urinary systems and electrolytes">Renal & Electrolytes</option>
-                            <option value="Endocrine, Diabetes and metabolism">Endocrine & Metabolism</option>
-                            <option value="Cardiovascular System">Cardiovascular</option>
-                            <option value="Hematology and Oncology">Hematology & Oncology</option>
-                            <option value="Infectious diseases">Infectious Diseases</option>
-                            <option value="Rheumatology / Orthopedics and Sports">Rheumatology & Ortho</option>
-                            <option value="Allergy and Immunology">Allergy & Immunology</option>
-                            <option value="Dermatology">Dermatology</option>
-                            <option value="Ear, nose, throat (ENT)">ENT</option>
-                            <option value="Male Reproductive System">Male Reproductive</option>
-                            <option value="Social Sciences (Ethics/Legal/Prof)">Social Sciences</option>
-                            <option value="Poisening and environmental exposure">Poisoning & Environmental</option>
-                            <option value="pregnancy, Childbirth & Puerperium">Pregnancy & Childbirth</option>
-                            <option value="Miscellaneous">Miscellaneous</option>
-                        </select>
+                    <div class="form-group full">
+                        <label for="form-notes">Notes</label>
+                        <textarea id="form-notes" rows="3" placeholder="What happened? What did you miss?"></textarea>
                     </div>
-                    <div class="form-group">
-                        <label for="form-category">Category *</label>
-                        <input type="text" id="form-category" required placeholder="e.g., Demyelinating Diseases">
+                    <div class="form-group full">
+                        <label for="form-strategy">Strategy to Correct It</label>
+                        <textarea id="form-strategy" rows="3" placeholder="How will you avoid this next time?"></textarea>
                     </div>
-                    <div class="form-group">
-                        <label for="form-topic">Topic *</label>
-                        <input type="text" id="form-topic" required placeholder="e.g., Multiple Sclerosis">
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary" id="submit-btn">Add Missed Question</button>
+                        <button type="reset" class="btn btn-secondary">Clear</button>
                     </div>
-                    <div class="form-group">
-                        <label for="form-error">Why I Missed It *</label>
-                        <select id="form-error" required>
-                            <option value="">Select Error Type</option>
-                            <option value="Knowledge gap">Knowledge Gap</option>
-                            <option value="Anchoring Bias">Anchoring Bias</option>
-                            <option value="Premature conclusion">Premature Conclusion</option>
-                            <option value="Hidden Hook Failure">Hidden Hook Failure</option>
-                            <option value="Right map / wrong order">Right Map / Wrong Order</option>
-                            <option value="Wrong Algorithm">Wrong Algorithm</option>
-                            <option value="Dumb mistake">Dumb Mistake</option>
-                            <option value="Misunderstood vinnet">Misunderstood Vignette</option>
-                        </select>
+                    <div id="form-message" class="form-message"></div>
+                </form>
+            </div>
+
+            <!-- IM TRACKER FORM -->
+            <div id="form-im-tracker-entry" class="form-panel">
+                <p class="section-subtitle">Log today's question bank progress to the IM Tracker</p>
+                <form id="tracker-form">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="tracker-date">Date *</label>
+                            <input type="date" id="tracker-date" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="tracker-q-completed">Questions Completed *</label>
+                            <input type="number" id="tracker-q-completed" required min="0" placeholder="e.g., 30">
+                        </div>
+                        <div class="form-group">
+                            <label for="tracker-pct-correct">% Correct *</label>
+                            <input type="number" id="tracker-pct-correct" required min="0" max="100" placeholder="e.g., 65">
+                        </div>
+                        <div class="form-group">
+                            <label for="tracker-q-remaining">Questions Remaining *</label>
+                            <input type="number" id="tracker-q-remaining" required min="0" placeholder="e.g., 450">
+                        </div>
                     </div>
-                </div>
-                <div class="form-group full">
-                    <label for="form-notes">Notes</label>
-                    <textarea id="form-notes" rows="3" placeholder="What happened? What did you miss?"></textarea>
-                </div>
-                <div class="form-group full">
-                    <label for="form-strategy">Strategy to Correct It</label>
-                    <textarea id="form-strategy" rows="3" placeholder="How will you avoid this next time?"></textarea>
-                </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary" id="submit-btn">Add Entry</button>
-                    <button type="reset" class="btn btn-secondary">Clear</button>
-                </div>
-                <div id="form-message" class="form-message"></div>
-            </form>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary" id="tracker-submit-btn">Add Tracker Entry</button>
+                        <button type="reset" class="btn btn-secondary">Clear</button>
+                    </div>
+                    <div id="tracker-form-message" class="form-message"></div>
+                </form>
+            </div>
         </section>
     </main>
 

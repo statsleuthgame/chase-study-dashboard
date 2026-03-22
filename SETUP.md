@@ -21,18 +21,36 @@ This creates a free web endpoint that lets the dashboard write new rows to your 
 
 ```javascript
 function doPost(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var data = JSON.parse(e.postData.contents);
 
-  sheet.appendRow([
-    data.shelf,
-    data.system,
-    data.category,
-    data.topic,
-    data.errorType,
-    data.notes,
-    data.strategy
-  ]);
+  if (data.type === 'im-tracker') {
+    // Write to the IM Tracker sheet
+    var trackerSheet = ss.getSheetByName('IM Tracker');
+    if (!trackerSheet) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ status: 'error', message: 'IM Tracker sheet not found' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    trackerSheet.appendRow([
+      data.date,
+      data.qCompleted,
+      data.pctCorrect,
+      data.qRemaining
+    ]);
+  } else {
+    // Write to the first sheet (Lessons Learned Journal)
+    var sheet = ss.getSheets()[0];
+    sheet.appendRow([
+      data.shelf,
+      data.system,
+      data.category,
+      data.topic,
+      data.errorType,
+      data.notes,
+      data.strategy
+    ]);
+  }
 
   return ContentService
     .createTextOutput(JSON.stringify({ status: 'success' }))
@@ -45,6 +63,8 @@ function doGet(e) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 ```
+
+> **IMPORTANT:** If you already deployed a previous version, you need to create a **New deployment** (not update the old one) for the changes to take effect. Copy the new URL and paste it when prompted by the dashboard.
 
 4. Click **Deploy → New deployment**
 5. Click the gear icon → select **Web app**

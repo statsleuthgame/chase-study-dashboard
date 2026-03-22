@@ -1155,6 +1155,45 @@ table tbody tr:hover {
    Form
    ============================================================ */
 
+.form-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 24px;
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 0;
+}
+
+.form-tab {
+    padding: 12px 24px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-family: inherit;
+}
+
+.form-tab:hover {
+    color: var(--text-secondary);
+}
+
+.form-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+.form-panel {
+    display: none;
+}
+
+.form-panel.active {
+    display: block;
+}
+
 .form-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;

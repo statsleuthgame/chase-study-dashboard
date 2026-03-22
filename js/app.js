@@ -1398,14 +1398,23 @@ document.getElementById('filter-error').addEventListener('change', applyFilters)
 document.getElementById('filter-search').addEventListener('input', applyFilters);
 
 // ============================================================
-// 10. ADD ENTRY FORM
+// 10. ADD ENTRY FORMS
 // ============================================================
 
-document.getElementById('entry-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const msgEl = document.getElementById('form-message');
-    const btn = document.getElementById('submit-btn');
+// Form tab switching
+document.querySelectorAll('.form-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.form-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.form-panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('form-' + tab.dataset.form).classList.add('active');
+    });
+});
 
+// Set default date to today on the tracker form
+document.getElementById('tracker-date').valueAsDate = new Date();
+
+function ensureAppsScriptUrl(msgEl) {
     if (!APPS_SCRIPT_URL) {
         const url = prompt('Enter your Google Apps Script Web App URL.\n\nSee SETUP.md for deployment instructions.');
         if (url) {
@@ -1414,11 +1423,21 @@ document.getElementById('entry-form').addEventListener('submit', async (e) => {
         } else {
             msgEl.className = 'form-message error';
             msgEl.textContent = 'Apps Script URL required. See SETUP.md.';
-            return;
+            return false;
         }
     }
+    return true;
+}
+
+// Missed Question form
+document.getElementById('entry-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msgEl = document.getElementById('form-message');
+    const btn = document.getElementById('submit-btn');
+    if (!ensureAppsScriptUrl(msgEl)) return;
 
     const entry = {
+        type: 'missed-question',
         shelf: document.getElementById('form-shelf').value,
         system: document.getElementById('form-system').value,
         category: document.getElementById('form-category').value,
@@ -1438,11 +1457,9 @@ document.getElementById('entry-form').addEventListener('submit', async (e) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(entry),
         });
-
         msgEl.className = 'form-message success';
-        msgEl.textContent = 'Entry added! Refreshing data...';
+        msgEl.textContent = 'Missed question added! Refreshing data...';
         document.getElementById('entry-form').reset();
-
         setTimeout(async () => {
             await fetchData();
             renderAll();
@@ -1453,7 +1470,55 @@ document.getElementById('entry-form').addEventListener('submit', async (e) => {
         msgEl.textContent = 'Error: ' + err.message;
     } finally {
         btn.disabled = false;
-        btn.textContent = 'Add Entry';
+        btn.textContent = 'Add Missed Question';
+    }
+});
+
+// IM Tracker form
+document.getElementById('tracker-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msgEl = document.getElementById('tracker-form-message');
+    const btn = document.getElementById('tracker-submit-btn');
+    if (!ensureAppsScriptUrl(msgEl)) return;
+
+    const dateInput = document.getElementById('tracker-date').value;
+    // Format date as M/D/YY to match the sheet format
+    const d = new Date(dateInput + 'T00:00:00');
+    const dateFormatted = `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`;
+
+    const entry = {
+        type: 'im-tracker',
+        date: dateFormatted,
+        qCompleted: parseInt(document.getElementById('tracker-q-completed').value) || 0,
+        pctCorrect: document.getElementById('tracker-pct-correct').value + '%',
+        qRemaining: parseInt(document.getElementById('tracker-q-remaining').value) || 0,
+    };
+
+    btn.disabled = true;
+    btn.textContent = 'Adding...';
+
+    try {
+        await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(entry),
+        });
+        msgEl.className = 'form-message success';
+        msgEl.textContent = 'Tracker entry added! Refreshing data...';
+        document.getElementById('tracker-form').reset();
+        document.getElementById('tracker-date').valueAsDate = new Date();
+        setTimeout(async () => {
+            await fetchData();
+            renderAll();
+            msgEl.style.display = 'none';
+        }, 2000);
+    } catch (err) {
+        msgEl.className = 'form-message error';
+        msgEl.textContent = 'Error: ' + err.message;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Add Tracker Entry';
     }
 });
 
