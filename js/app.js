@@ -113,16 +113,31 @@ async function fetchData() {
             }));
 
         // Fetch IM Tracker (second tab)
-        try {
-            const trackerResp = await fetch(TRACKER_CSV_URL);
-            if (trackerResp.ok) {
+        // Try multiple sheet name formats since Google Sheets can be picky
+        const trackerUrls = [
+            `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=IM+Tracker`,
+            `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=IM%20Tracker`,
+        ];
+        for (const url of trackerUrls) {
+            try {
+                const trackerResp = await fetch(url);
+                if (!trackerResp.ok) continue;
                 const trackerCsv = await trackerResp.text();
                 const trackerRows = parseCSV(trackerCsv);
+                // Check if this is actually the tracker (header should have "Date" or "Q Completed")
+                const header = (trackerRows[0] || []).join(' ').toLowerCase();
+                if (!header.includes('date') && !header.includes('completed')) continue;
+
                 trackerData = trackerRows.slice(1)
-                    .filter(row => row[0] && row[0].trim() && row[1] && row[1].trim())
+                    .filter(row => {
+                        const dateVal = (row[0] || '').trim();
+                        const qVal = (row[1] || '').trim();
+                        // Must have a date-like value and a numeric question count
+                        return dateVal && /\d/.test(dateVal) && qVal && /^\d+$/.test(qVal);
+                    })
                     .map(row => {
-                        const pctStr = (row[2] || '').replace('%', '').trim();
-                        const pct = pctStr && pctStr !== '—' ? parseFloat(pctStr) : null;
+                        const pctStr = (row[2] || '').replace(/%/g, '').replace(/[—–-]/g, '').trim();
+                        const pct = pctStr && !isNaN(parseFloat(pctStr)) ? parseFloat(pctStr) : null;
                         const qCompleted = parseInt(row[1]) || 0;
                         const qRemaining = parseInt(row[3]) || 0;
                         return {
@@ -132,10 +147,13 @@ async function fetchData() {
                             qRemaining,
                         };
                     })
-                    .filter(r => r.qCompleted > 0); // skip zero/rest days for charting
+                    .filter(r => r.qCompleted > 0);
+
+                console.log('IM Tracker loaded:', trackerData.length, 'rows');
+                break; // success, stop trying
+            } catch (e) {
+                console.warn('Tracker fetch attempt failed:', url, e);
             }
-        } catch (e) {
-            console.warn('Could not fetch IM Tracker:', e);
         }
 
         document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
@@ -398,7 +416,11 @@ function renderStudyToday() {
 // ============================================================
 
 function renderIMTracker() {
-    if (!trackerData.length) return;
+    if (!trackerData.length) {
+        console.warn('No tracker data available. trackerData:', trackerData);
+        document.getElementById('tracker-total-q').textContent = 'No data';
+        return;
+    }
 
     const labels = trackerData.map(d => d.date);
     const scores = trackerData.map(d => d.pctCorrect);
