@@ -229,12 +229,15 @@ const animationObserver = new IntersectionObserver((entries) => {
     });
 }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
 
-function observeAnimations() {
-    document.querySelectorAll('.animate-in').forEach(el => {
-        el.classList.remove('visible');
+function observeAnimations(container) {
+    const root = container || document;
+    root.querySelectorAll('.animate-in:not(.visible)').forEach(el => {
         animationObserver.observe(el);
     });
 }
+
+// Track which sections have been rendered
+const renderedSections = new Set();
 
 // ============================================================
 // Loading overlay
@@ -272,12 +275,33 @@ document.querySelectorAll('.nav-link').forEach(link => {
         document.getElementById(section).classList.add('active');
         link.classList.add('active');
         updateContentHeader(section);
-        // Re-trigger entrance animations for the new section
-        setTimeout(observeAnimations, 50);
+        // Lazy render: only render a section when first visited
+        renderSection(section);
+        // Observe animations only within this section
+        setTimeout(() => observeAnimations(document.getElementById(section)), 50);
         // Scroll content to top
         document.querySelector('.content').scrollTo({ top: 0, behavior: 'smooth' });
     });
 });
+
+// Render a section only if it hasn't been rendered yet
+function renderSection(sectionId) {
+    if (!rawData.length || renderedSections.has(sectionId)) return;
+    renderedSections.add(sectionId);
+
+    switch (sectionId) {
+        case 'study-today': renderStudyToday(); break;
+        case 'overview': renderOverview(); break;
+        case 'pareto': renderPareto(); break;
+        case 'error-analysis': renderErrorAnalysis(); break;
+        case 'systems': renderSystems(); break;
+        case 'shelves': renderShelves(); break;
+        case 'repeat-topics': renderRepeatTopics(); break;
+        case 'trends': renderTrends(); break;
+        case 'entries': populateFilters(); renderEntries(); break;
+        case 'add-entry': break; // static form, nothing to render
+    }
+}
 
 // ============================================================
 // 1. WHAT TO STUDY TODAY
@@ -1235,19 +1259,14 @@ document.getElementById('refresh-btn').addEventListener('click', async () => {
 });
 
 function renderAll() {
-    renderStudyToday();
-    renderOverview();
-    renderPareto();
-    renderErrorAnalysis();
-    renderSystems();
-    renderShelves();
-    renderRepeatTopics();
-    renderTrends();
-    populateFilters();
-    renderEntries();
-    updateContentHeader('study-today');
-    // Kick off scroll-in animations
-    setTimeout(observeAnimations, 100);
+    // Clear rendered tracking so everything re-renders
+    renderedSections.clear();
+    // Only render the currently active section
+    const activeSection = document.querySelector('.section.active');
+    const activeId = activeSection ? activeSection.id : 'study-today';
+    renderSection(activeId);
+    updateContentHeader(activeId);
+    setTimeout(() => observeAnimations(activeSection), 100);
 }
 
 (async function init() {

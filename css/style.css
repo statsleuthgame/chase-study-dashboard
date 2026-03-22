@@ -282,11 +282,11 @@ body {
 
 .section {
     display: none;
-    animation: sectionFadeIn 0.4s ease;
 }
 
 .section.active {
     display: block;
+    animation: sectionFadeIn 0.3s ease;
 }
 
 @keyframes sectionFadeIn {
