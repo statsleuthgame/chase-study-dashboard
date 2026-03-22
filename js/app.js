@@ -329,7 +329,11 @@ function renderSection(sectionId) {
         case 'add-entry': break; // static form, nothing to render
     }
     // Generate data-driven conclusion for this section
-    renderConclusion(sectionId);
+    try {
+        renderConclusion(sectionId);
+    } catch (e) {
+        console.error('Error rendering conclusion for', sectionId, e);
+    }
 }
 
 // ============================================================

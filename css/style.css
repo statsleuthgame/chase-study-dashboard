@@ -341,7 +341,7 @@ body {
    ============================================================ */
 
 .section-conclusion {
-    margin-top: 32px;
+    margin-bottom: 24px;
     padding: 24px;
     background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(139, 92, 246, 0.06));
     border: 1px solid rgba(59, 130, 246, 0.2);
