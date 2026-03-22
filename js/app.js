@@ -217,25 +217,6 @@ const SECTION_NAMES = {
     'add-entry': 'Add New Entry',
 };
 
-// ============================================================
-// Intersection Observer for scroll-in animations
-// ============================================================
-
-const animationObserver = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-        if (entry.isIntersecting) {
-            entry.target.classList.add('visible');
-        }
-    });
-}, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
-
-function observeAnimations(container) {
-    const root = container || document;
-    root.querySelectorAll('.animate-in:not(.visible)').forEach(el => {
-        animationObserver.observe(el);
-    });
-}
-
 // Track which sections have been rendered
 const renderedSections = new Set();
 
@@ -277,8 +258,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
         updateContentHeader(section);
         // Lazy render: only render a section when first visited
         renderSection(section);
-        // Observe animations only within this section
-        setTimeout(() => observeAnimations(document.getElementById(section)), 50);
         // Scroll content to top
         document.querySelector('.content').scrollTo({ top: 0, behavior: 'smooth' });
     });
@@ -1266,7 +1245,6 @@ function renderAll() {
     const activeId = activeSection ? activeSection.id : 'study-today';
     renderSection(activeId);
     updateContentHeader(activeId);
-    setTimeout(() => observeAnimations(activeSection), 100);
 }
 
 (async function init() {

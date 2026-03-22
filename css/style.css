@@ -330,23 +330,11 @@ body {
    Scroll-in animations (intersection observer)
    ============================================================ */
 
+/* animate-in is now purely cosmetic — no hidden state */
 .animate-in {
-    opacity: 0;
-    transform: translateY(20px);
-    transition: opacity 0.5s ease, transform 0.5s ease;
-}
-
-.animate-in.visible {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
 }
-
-/* stagger children */
-.animate-in.visible:nth-child(2) { transition-delay: 0.06s; }
-.animate-in.visible:nth-child(3) { transition-delay: 0.12s; }
-.animate-in.visible:nth-child(4) { transition-delay: 0.18s; }
-.animate-in.visible:nth-child(5) { transition-delay: 0.24s; }
-.animate-in.visible:nth-child(6) { transition-delay: 0.30s; }
 
 /* ============================================================
    Stats Grid
