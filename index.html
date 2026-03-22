@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Step 2 Study Dashboard</title>
+    <title>Step 2 CK Study Dashboard</title>
     <link rel="stylesheet" href="css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 </head>
@@ -14,13 +14,16 @@
             <p>Study Dashboard</p>
         </div>
         <ul class="nav-links">
-            <li><a href="#overview" class="nav-link active" data-section="overview">Overview</a></li>
-            <li><a href="#error-analysis" class="nav-link" data-section="error-analysis">Error Analysis</a></li>
-            <li><a href="#systems" class="nav-link" data-section="systems">Systems Breakdown</a></li>
-            <li><a href="#shelves" class="nav-link" data-section="shelves">Shelf Performance</a></li>
-            <li><a href="#trends" class="nav-link" data-section="trends">Trends & Insights</a></li>
-            <li><a href="#entries" class="nav-link" data-section="entries">All Entries</a></li>
-            <li><a href="#add-entry" class="nav-link" data-section="add-entry">+ Add Entry</a></li>
+            <li><a href="#" class="nav-link active" data-section="study-today">What to Study Today</a></li>
+            <li><a href="#" class="nav-link" data-section="overview">Overview</a></li>
+            <li><a href="#" class="nav-link" data-section="pareto">Pareto Analysis</a></li>
+            <li><a href="#" class="nav-link" data-section="error-analysis">Error Analysis</a></li>
+            <li><a href="#" class="nav-link" data-section="systems">Systems Breakdown</a></li>
+            <li><a href="#" class="nav-link" data-section="shelves">Shelf Performance</a></li>
+            <li><a href="#" class="nav-link" data-section="repeat-topics">Repeat Topics</a></li>
+            <li><a href="#" class="nav-link" data-section="trends">Trends & Insights</a></li>
+            <li><a href="#" class="nav-link" data-section="entries">All Entries</a></li>
+            <li><a href="#" class="nav-link" data-section="add-entry">+ Add Entry</a></li>
         </ul>
         <div class="sidebar-footer">
             <button id="refresh-btn" class="btn btn-secondary">Refresh Data</button>
@@ -29,31 +32,116 @@
     </nav>
 
     <main class="content">
-        <!-- Overview Section -->
-        <section id="overview" class="section active">
+
+        <!-- WHAT TO STUDY TODAY -->
+        <section id="study-today" class="section active">
+            <h2>What to Study Today</h2>
+            <p class="section-subtitle">Your highest-impact study targets based on data analysis</p>
+
+            <div class="study-today-grid">
+                <div class="study-card priority-high">
+                    <div class="study-card-header">
+                        <span class="priority-label">PRIORITY 1</span>
+                        <span class="priority-tag">Content Review</span>
+                    </div>
+                    <h3 id="today-p1-title">--</h3>
+                    <p id="today-p1-desc">--</p>
+                    <div class="study-card-meta" id="today-p1-meta"></div>
+                </div>
+                <div class="study-card priority-medium">
+                    <div class="study-card-header">
+                        <span class="priority-label">PRIORITY 2</span>
+                        <span class="priority-tag">Technique</span>
+                    </div>
+                    <h3 id="today-p2-title">--</h3>
+                    <p id="today-p2-desc">--</p>
+                    <div class="study-card-meta" id="today-p2-meta"></div>
+                </div>
+                <div class="study-card priority-low">
+                    <div class="study-card-header">
+                        <span class="priority-label">PRIORITY 3</span>
+                        <span class="priority-tag">Quick Wins</span>
+                    </div>
+                    <h3 id="today-p3-title">--</h3>
+                    <p id="today-p3-desc">--</p>
+                    <div class="study-card-meta" id="today-p3-meta"></div>
+                </div>
+            </div>
+
+            <h3 class="subsection-title">Study Priority Score (Weighted Ranking)</h3>
+            <p class="section-subtitle">Higher score = higher impact. Weighted by error severity: Knowledge Gaps &amp; Wrong Algorithms count 3x, cognitive biases 1.5x, dumb mistakes 0.5x</p>
+            <div class="table-wrapper">
+                <table id="priority-table">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>System</th>
+                            <th>Misses</th>
+                            <th>Priority Score</th>
+                            <th>Dominant Error</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="priority-tbody"></tbody>
+                </table>
+            </div>
+
+            <h3 class="subsection-title">Repeat Topic Offenders</h3>
+            <p class="section-subtitle">Topics that appear 2+ times — your highest-yield review targets</p>
+            <div class="table-wrapper">
+                <table id="repeat-quick-table">
+                    <thead>
+                        <tr>
+                            <th>Topic</th>
+                            <th>Times Missed</th>
+                            <th>Systems</th>
+                            <th>Error Types</th>
+                        </tr>
+                    </thead>
+                    <tbody id="repeat-quick-tbody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- OVERVIEW -->
+        <section id="overview" class="section">
             <h2>Overview</h2>
             <div class="stats-grid">
                 <div class="stat-card">
                     <span class="stat-number" id="total-entries">--</span>
                     <span class="stat-label">Total Missed Questions</span>
                 </div>
-                <div class="stat-card">
-                    <span class="stat-number" id="total-shelves">--</span>
-                    <span class="stat-label">Shelves Covered</span>
+                <div class="stat-card stat-highlight-red">
+                    <span class="stat-number" id="knowledge-gap-ratio">--</span>
+                    <span class="stat-label">Knowledge Gap Ratio</span>
+                    <span class="stat-hint">% of misses from not knowing content</span>
+                </div>
+                <div class="stat-card stat-highlight-yellow">
+                    <span class="stat-number" id="cognitive-error-rate">--</span>
+                    <span class="stat-label">Cognitive Error Rate</span>
+                    <span class="stat-hint">% of misses from reasoning mistakes</span>
                 </div>
                 <div class="stat-card">
-                    <span class="stat-number" id="top-error-type">--</span>
-                    <span class="stat-label">Most Common Error</span>
+                    <span class="stat-number" id="repeat-topic-count">--</span>
+                    <span class="stat-label">Repeat Topics</span>
+                    <span class="stat-hint">Topics missed 2+ times</span>
                 </div>
                 <div class="stat-card">
-                    <span class="stat-number" id="weakest-system">--</span>
-                    <span class="stat-label">Weakest System</span>
+                    <span class="stat-number" id="pareto-threshold">--</span>
+                    <span class="stat-label">Pareto Systems</span>
+                    <span class="stat-hint">Systems causing 80% of misses</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number" id="weakest-shelf-stat">--</span>
+                    <span class="stat-label">Weakest Shelf</span>
+                    <span class="stat-hint" id="weakest-shelf-detail"></span>
                 </div>
             </div>
+
             <div class="chart-row">
                 <div class="chart-container">
-                    <h3>Errors by Type</h3>
-                    <canvas id="overview-error-chart"></canvas>
+                    <h3>Knowledge vs Reasoning Errors</h3>
+                    <canvas id="knowledge-vs-reasoning-chart"></canvas>
                 </div>
                 <div class="chart-container">
                     <h3>Entries by Shelf</h3>
@@ -61,66 +149,124 @@
                 </div>
             </div>
             <div class="chart-row">
-                <div class="chart-container full-width">
-                    <h3>Missed Questions by System</h3>
-                    <canvas id="overview-system-chart"></canvas>
+                <div class="chart-container">
+                    <h3>Error Type Distribution</h3>
+                    <canvas id="overview-error-chart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3>Knowledge vs Reasoning by Shelf</h3>
+                    <canvas id="kv-reasoning-shelf-chart"></canvas>
                 </div>
             </div>
         </section>
 
-        <!-- Error Analysis Section -->
+        <!-- PARETO ANALYSIS -->
+        <section id="pareto" class="section">
+            <h2>Pareto Analysis (80/20 Rule)</h2>
+            <p class="section-subtitle">Which systems and categories cause the majority of your misses?</p>
+
+            <div class="chart-row">
+                <div class="chart-container full-width">
+                    <h3>Systems — Cumulative Impact</h3>
+                    <canvas id="pareto-system-chart"></canvas>
+                </div>
+            </div>
+            <div class="chart-row">
+                <div class="chart-container full-width">
+                    <h3>Categories — Cumulative Impact</h3>
+                    <canvas id="pareto-category-chart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- ERROR ANALYSIS -->
         <section id="error-analysis" class="section">
             <h2>Error Analysis</h2>
+
             <div class="chart-row">
                 <div class="chart-container">
                     <h3>Error Type Distribution</h3>
                     <canvas id="error-pie-chart"></canvas>
                 </div>
                 <div class="chart-container">
-                    <h3>Error Types by Shelf</h3>
+                    <h3>Error Types per Shelf (100% Stacked)</h3>
                     <canvas id="error-by-shelf-chart"></canvas>
                 </div>
             </div>
-            <div class="insight-cards" id="error-insights">
-                <!-- Populated by JS -->
+
+            <div class="chart-row">
+                <div class="chart-container full-width">
+                    <h3>Error Type vs System Heatmap</h3>
+                    <div class="heatmap-wrapper" id="heatmap-container">
+                        <!-- Rendered as HTML grid -->
+                    </div>
+                </div>
             </div>
+
+            <div class="insight-cards" id="error-insights"></div>
         </section>
 
-        <!-- Systems Breakdown Section -->
+        <!-- SYSTEMS BREAKDOWN -->
         <section id="systems" class="section">
             <h2>Systems Breakdown</h2>
+
             <div class="chart-row">
                 <div class="chart-container full-width">
-                    <h3>Missed Questions per System</h3>
-                    <canvas id="system-bar-chart"></canvas>
+                    <h3>Missed Questions per System (with Error Type Breakdown)</h3>
+                    <canvas id="system-stacked-chart"></canvas>
                 </div>
             </div>
-            <div class="chart-row">
-                <div class="chart-container full-width">
-                    <h3>Error Types Within Each System</h3>
-                    <canvas id="system-error-heatmap"></canvas>
+
+            <div class="system-selector">
+                <label for="system-drilldown-select">Drill into system:</label>
+                <select id="system-drilldown-select">
+                    <option value="">Select a system...</option>
+                </select>
+            </div>
+            <div id="system-drilldown-container" style="display:none;">
+                <div class="chart-row">
+                    <div class="chart-container">
+                        <h3>Categories within <span id="drilldown-system-name"></span></h3>
+                        <canvas id="system-category-chart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Error Types in <span id="drilldown-system-name2"></span></h3>
+                        <canvas id="system-drilldown-error-chart"></canvas>
+                    </div>
+                </div>
+                <div class="table-wrapper">
+                    <table id="system-drilldown-table">
+                        <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th>Topic</th>
+                                <th>Error Type</th>
+                                <th>Notes</th>
+                                <th>Strategy</th>
+                            </tr>
+                        </thead>
+                        <tbody id="system-drilldown-tbody"></tbody>
+                    </table>
                 </div>
             </div>
-            <div class="insight-cards" id="system-insights">
-                <!-- Populated by JS -->
-            </div>
+
+            <div class="insight-cards" id="system-insights"></div>
         </section>
 
-        <!-- Shelf Performance Section -->
+        <!-- SHELF PERFORMANCE -->
         <section id="shelves" class="section">
             <h2>Shelf Performance</h2>
             <div class="chart-row">
-                <div class="chart-container">
-                    <h3>Questions Missed per Shelf</h3>
-                    <canvas id="shelf-bar-chart"></canvas>
-                </div>
-                <div class="chart-container">
-                    <h3>Shelf Error Profile</h3>
-                    <canvas id="shelf-radar-chart"></canvas>
+                <div class="chart-container full-width">
+                    <h3>Questions Missed per Shelf (100% Error Profile)</h3>
+                    <canvas id="shelf-100-stacked-chart"></canvas>
                 </div>
             </div>
+            <div class="small-multiples-grid" id="shelf-radars-container">
+                <!-- Small multiple radar charts rendered by JS -->
+            </div>
             <div class="shelf-selector">
-                <label for="shelf-select">Select Shelf:</label>
+                <label for="shelf-select">Drill into shelf:</label>
                 <select id="shelf-select">
                     <option value="all">All Shelves</option>
                 </select>
@@ -133,50 +279,61 @@
             </div>
         </section>
 
-        <!-- Trends & Insights Section -->
+        <!-- REPEAT TOPICS -->
+        <section id="repeat-topics" class="section">
+            <h2>Repeat Topics</h2>
+            <p class="section-subtitle">Topics missed more than once — your highest-yield review targets</p>
+
+            <div class="chart-row">
+                <div class="chart-container full-width">
+                    <h3>Topics Missed 2+ Times</h3>
+                    <canvas id="repeat-topics-chart"></canvas>
+                </div>
+            </div>
+
+            <div class="table-wrapper">
+                <table id="repeat-topics-table">
+                    <thead>
+                        <tr>
+                            <th>Topic</th>
+                            <th>Times Missed</th>
+                            <th>Shelves</th>
+                            <th>Systems</th>
+                            <th>Error Types</th>
+                            <th>Categories</th>
+                        </tr>
+                    </thead>
+                    <tbody id="repeat-topics-tbody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- TRENDS & INSIGHTS -->
         <section id="trends" class="section">
             <h2>Trends & Insights</h2>
             <div class="trends-summary">
                 <div class="trend-card priority-high">
                     <h3>High Priority Focus Areas</h3>
-                    <ul id="high-priority-list">
-                        <!-- Populated by JS -->
-                    </ul>
+                    <ul id="high-priority-list"></ul>
                 </div>
                 <div class="trend-card priority-medium">
                     <h3>Recurring Patterns</h3>
-                    <ul id="pattern-list">
-                        <!-- Populated by JS -->
-                    </ul>
+                    <ul id="pattern-list"></ul>
                 </div>
                 <div class="trend-card priority-low">
                     <h3>Strategy Recommendations</h3>
-                    <ul id="strategy-list">
-                        <!-- Populated by JS -->
-                    </ul>
-                </div>
-            </div>
-            <div class="chart-row">
-                <div class="chart-container full-width">
-                    <h3>Error Type vs System Heatmap</h3>
-                    <canvas id="heatmap-chart"></canvas>
+                    <ul id="strategy-list"></ul>
                 </div>
             </div>
         </section>
 
-        <!-- All Entries Section -->
+        <!-- ALL ENTRIES -->
         <section id="entries" class="section">
             <h2>All Entries</h2>
             <div class="filters">
-                <select id="filter-shelf">
-                    <option value="">All Shelves</option>
-                </select>
-                <select id="filter-system">
-                    <option value="">All Systems</option>
-                </select>
-                <select id="filter-error">
-                    <option value="">All Error Types</option>
-                </select>
+                <select id="filter-shelf"><option value="">All Shelves</option></select>
+                <select id="filter-system"><option value="">All Systems</option></select>
+                <select id="filter-error"><option value="">All Error Types</option></select>
                 <input type="text" id="filter-search" placeholder="Search topics, notes...">
             </div>
             <div class="table-wrapper">
@@ -192,15 +349,13 @@
                             <th>Strategy</th>
                         </tr>
                     </thead>
-                    <tbody id="entries-tbody">
-                        <!-- Populated by JS -->
-                    </tbody>
+                    <tbody id="entries-tbody"></tbody>
                 </table>
             </div>
             <p class="entry-count">Showing <span id="showing-count">0</span> of <span id="total-count">0</span> entries</p>
         </section>
 
-        <!-- Add Entry Section -->
+        <!-- ADD ENTRY -->
         <section id="add-entry" class="section">
             <h2>Add New Entry</h2>
             <form id="entry-form">
