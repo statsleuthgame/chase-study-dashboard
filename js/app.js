@@ -328,6 +328,8 @@ function renderSection(sectionId) {
         case 'entries': populateFilters(); renderEntries(); break;
         case 'add-entry': break; // static form, nothing to render
     }
+    // Generate data-driven conclusion for this section
+    renderConclusion(sectionId);
 }
 
 // ============================================================
@@ -1454,6 +1456,192 @@ document.getElementById('entry-form').addEventListener('submit', async (e) => {
         btn.textContent = 'Add Entry';
     }
 });
+
+// ============================================================
+// SECTION CONCLUSIONS
+// ============================================================
+
+function setConclusion(id, title, bodyHtml) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = `
+        <div class="conclusion-title">Key Takeaway</div>
+        <div class="conclusion-body">${bodyHtml}</div>
+    `;
+}
+
+function renderConclusion(sectionId) {
+    const total = rawData.length;
+    const errorCounts = countBy(rawData, 'errorType');
+    const systemCounts = countBy(rawData, 'system');
+    const shelfCounts = countBy(rawData, 'shelf');
+    const sortedSystems = sortedEntries(systemCounts);
+    const sortedErrors = sortedEntries(errorCounts);
+    const repeats = getRepeatTopics();
+    const knowledgeCount = rawData.filter(d => isKnowledgeError(d.errorType)).length;
+    const cognitiveCount = rawData.filter(d => isCognitiveError(d.errorType)).length;
+    const kgPct = ((knowledgeCount / total) * 100).toFixed(0);
+    const cogPct = ((cognitiveCount / total) * 100).toFixed(0);
+
+    switch (sectionId) {
+        case 'study-today': {
+            const topSys = sortedSystems[0];
+            const actionType = knowledgeCount > cognitiveCount ? 'content review (Anki, First Aid, reading)' : 'test-taking technique (slowing down, process of elimination)';
+            setConclusion('conclusion-study-today', 'Key Takeaway',
+                `<p>Out of <strong>${total}</strong> missed questions, the data says your biggest opportunity is in <strong>${topSys[0]}</strong> (${topSys[1]} misses). ` +
+                `Your errors lean toward ${knowledgeCount > cognitiveCount ? 'knowledge gaps' : 'cognitive/reasoning mistakes'}, meaning the most effective use of your study time right now is <strong>${actionType}</strong>.</p>` +
+                `${repeats.length > 0 ? `<p><strong>${repeats.length} topics</strong> have come up multiple times — these are your single highest-yield review targets because they represent persistent gaps, not one-off mistakes.</p>` : ''}` +
+                `<div class="takeaway">Bottom line: Focus your next study session on ${topSys[0]}, prioritize repeat topics, and ${knowledgeCount > cognitiveCount ? 'fill knowledge gaps with targeted content review' : 'practice systematic question approaches to reduce reasoning errors'}.</div>`
+            );
+            break;
+        }
+        case 'im-tracker': {
+            if (!trackerData.length) {
+                setConclusion('conclusion-im-tracker', 'Key Takeaway', '<p>No tracker data available yet.</p>');
+                break;
+            }
+            const validScores = trackerData.map(d => d.pctCorrect).filter(v => v !== null);
+            const avgScore = validScores.length ? (validScores.reduce((a, b) => a + b, 0) / validScores.length).toFixed(1) : '0';
+            const recentScores = validScores.slice(-7);
+            const earlyScores = validScores.slice(0, 7);
+            const recentAvg = recentScores.length ? (recentScores.reduce((a, b) => a + b, 0) / recentScores.length).toFixed(1) : '0';
+            const earlyAvg = earlyScores.length ? (earlyScores.reduce((a, b) => a + b, 0) / earlyScores.length).toFixed(1) : '0';
+            const improving = parseFloat(recentAvg) > parseFloat(earlyAvg);
+            const diff = Math.abs(parseFloat(recentAvg) - parseFloat(earlyAvg)).toFixed(1);
+            const totalQ = trackerData.reduce((s, d) => s + d.qCompleted, 0);
+            const lastRemaining = trackerData[trackerData.length - 1]?.qRemaining ?? 0;
+            setConclusion('conclusion-im-tracker', 'Key Takeaway',
+                `<p>Over <strong>${trackerData.length} study days</strong>, you completed <strong>${totalQ} questions</strong> with an overall average of <strong>${avgScore}%</strong>. ` +
+                `Your score has <strong>${improving ? 'improved' : 'declined'} by ${diff} percentage points</strong> comparing your first week (${earlyAvg}%) to your most recent week (${recentAvg}%).</p>` +
+                `<p>${lastRemaining === 0 ? 'You have completed the entire IM question bank — great work!' : `You have <strong>${lastRemaining} questions remaining</strong> in the bank.`}</p>` +
+                `<div class="takeaway">${improving ? 'Your scores are trending upward — the practice is working. Keep the current pace and focus on weak areas identified in other tabs.' : 'Your recent scores are lower than your early scores. Consider whether you are rushing through questions or if you need to revisit foundational content in your weakest systems.'}</div>`
+            );
+            break;
+        }
+        case 'overview': {
+            const topError = sortedErrors[0];
+            const topSys = sortedSystems[0];
+            setConclusion('conclusion-overview', 'Key Takeaway',
+                `<p>Across <strong>${total}</strong> missed questions, <strong>${kgPct}% are knowledge gaps</strong> (you didn't know the content) and <strong>${cogPct}% are cognitive errors</strong> (you knew the content but reasoned incorrectly). ` +
+                `These require fundamentally different fixes — content review vs. test-taking technique.</p>` +
+                `<p>The most common error type is <strong>${topError[0]}</strong> (${topError[1]} times, ${((topError[1] / total) * 100).toFixed(0)}% of all misses), and the weakest system is <strong>${topSys[0]}</strong> (${topSys[1]} misses).</p>` +
+                `<div class="takeaway">${parseInt(kgPct) > 50 ? 'More than half your errors are pure knowledge gaps — prioritize content review (Anki, First Aid, OME) over doing more practice questions.' : 'Your errors are spread across reasoning and knowledge — balance content review with deliberate practice on question technique.'}</div>`
+            );
+            break;
+        }
+        case 'pareto': {
+            let cumulative = 0, paretoCount = 0;
+            for (const [, count] of sortedSystems) {
+                cumulative += count;
+                paretoCount++;
+                if (cumulative >= total * 0.8) break;
+            }
+            const paretoSystems = sortedSystems.slice(0, paretoCount).map(e => e[0]);
+            const catCounts = sortedEntries(countBy(rawData, 'category'));
+            let catCum = 0, catPareto = 0;
+            for (const [, count] of catCounts) {
+                catCum += count;
+                catPareto++;
+                if (catCum >= total * 0.8) break;
+            }
+            setConclusion('conclusion-pareto', 'Key Takeaway',
+                `<p>The 80/20 rule is clear in your data: just <strong>${paretoCount} out of ${sortedSystems.length} systems</strong> account for 80% of all missed questions. ` +
+                `These are: <strong>${paretoSystems.join(', ')}</strong>.</p>` +
+                `<p>At the category level, <strong>${catPareto} out of ${catCounts.length} categories</strong> drive 80% of misses. The red bars in the charts above show what falls within the 80% threshold.</p>` +
+                `<div class="takeaway">If you have limited study time, concentrate exclusively on these ${paretoCount} systems. Everything else is lower yield. This is the single most efficient way to allocate your remaining study hours.</div>`
+            );
+            break;
+        }
+        case 'error-analysis': {
+            const topError = sortedErrors[0];
+            const biasCount = (errorCounts['Anchoring Bias'] || 0) + (errorCounts['Premature conclusion'] || 0);
+            const biasPct = ((biasCount / total) * 100).toFixed(0);
+            // Find which system has the most concentrated error type
+            const errorSystemPairs = [];
+            sortedErrors.forEach(([error]) => {
+                const bySystem = rawData.filter(d => d.errorType === error);
+                const sysCounts = sortedEntries(countBy(bySystem, 'system'));
+                if (sysCounts[0]) errorSystemPairs.push({ error, system: sysCounts[0][0], count: sysCounts[0][1] });
+            });
+            setConclusion('conclusion-error-analysis', 'Key Takeaway',
+                `<p><strong>${topError[0]}</strong> is your most frequent error at <strong>${((topError[1] / total) * 100).toFixed(0)}%</strong> of all misses. ` +
+                `${parseInt(biasPct) > 15 ? `Cognitive biases (anchoring + premature conclusions) together account for <strong>${biasPct}%</strong> — this is a significant pattern worth addressing with a systematic question approach.` : ''}</p>` +
+                `<p>The heatmap above reveals where specific errors cluster with specific systems. Key hotspots: ` +
+                `${errorSystemPairs.slice(0, 3).map(p => `<strong>${p.error}</strong> in ${p.system} (${p.count}x)`).join(', ')}.</p>` +
+                `<div class="takeaway">Each error type needs a different fix. Knowledge gaps need content review. Anchoring bias needs full-vignette reading. Premature conclusions need process of elimination. Use the heatmap to target which fix applies to which system.</div>`
+            );
+            break;
+        }
+        case 'systems': {
+            const top3 = sortedSystems.slice(0, 3);
+            const top3Pct = ((top3.reduce((s, e) => s + e[1], 0) / total) * 100).toFixed(0);
+            const systemDetails = top3.map(([sys, count]) => {
+                const sysData = rawData.filter(d => d.system === sys);
+                const topErr = sortedEntries(countBy(sysData, 'errorType'))[0];
+                const topCat = sortedEntries(countBy(sysData, 'category'))[0];
+                return { sys, count, topErr, topCat };
+            });
+            setConclusion('conclusion-systems', 'Key Takeaway',
+                `<p>Your top 3 weakest systems account for <strong>${top3Pct}%</strong> of all missed questions:</p>` +
+                `<p>${systemDetails.map(s => `<strong>${s.sys}</strong> (${s.count} misses): primarily ${s.topErr[0]} errors, concentrated in ${s.topCat[0]}`).join('<br>')}</p>` +
+                `<p>Use the drill-down selector above to explore categories and specific missed questions within each system.</p>` +
+                `<div class="takeaway">The error type breakdown per system matters: a system dominated by knowledge gaps needs content review, while one dominated by anchoring bias needs question practice. Check the stacked bars to see the difference.</div>`
+            );
+            break;
+        }
+        case 'shelves': {
+            const shelfSorted = sortedEntries(shelfCounts);
+            const weakest = shelfSorted[0];
+            const strongest = shelfSorted[shelfSorted.length - 1];
+            const shelfProfiles = shelfSorted.slice(0, 3).map(([shelf, count]) => {
+                const sd = rawData.filter(d => d.shelf === shelf);
+                const kg = sd.filter(d => isKnowledgeError(d.errorType)).length;
+                const cog = sd.filter(d => isCognitiveError(d.errorType)).length;
+                return { shelf, count, dominant: kg > cog ? 'knowledge gaps' : 'cognitive errors', dominantPct: ((Math.max(kg, cog) / count) * 100).toFixed(0) };
+            });
+            setConclusion('conclusion-shelves', 'Key Takeaway',
+                `<p><strong>${weakest[0]}</strong> is the weakest shelf with <strong>${weakest[1]}</strong> missed questions, while <strong>${strongest[0]}</strong> is the strongest with only ${strongest[1]}.</p>` +
+                `<p>The radar charts above show each shelf's error "fingerprint." Key patterns:<br>` +
+                `${shelfProfiles.map(s => `<strong>${s.shelf}</strong>: ${s.dominantPct}% ${s.dominant}`).join('<br>')}</p>` +
+                `<div class="takeaway">Different shelves need different study strategies. ${shelfProfiles[0].dominant === 'knowledge gaps' ? `${shelfProfiles[0].shelf} is primarily a content problem — study the material.` : `${shelfProfiles[0].shelf} is primarily a reasoning problem — practice questions with deliberate technique focus.`}</div>`
+            );
+            break;
+        }
+        case 'repeat-topics': {
+            if (repeats.length === 0) {
+                setConclusion('conclusion-repeat-topics', 'Key Takeaway', '<p>No repeat topics found yet. As you log more missed questions, topics that come up multiple times will appear here.</p>');
+                break;
+            }
+            const topRepeat = repeats[0];
+            const multiSystemRepeats = repeats.filter(t => t.systems.size > 1);
+            setConclusion('conclusion-repeat-topics', 'Key Takeaway',
+                `<p><strong>${repeats.length} topics</strong> have been missed 2 or more times. The most repeated is <strong>${topRepeat.topic}</strong> (${topRepeat.count} times across ${[...topRepeat.shelves].join(', ')}). ` +
+                `${multiSystemRepeats.length > 0 ? `<strong>${multiSystemRepeats.length}</strong> repeat topics appear across multiple systems, suggesting foundational concept gaps rather than isolated misses.` : ''}</p>` +
+                `<p>These repeat topics represent your <strong>highest-yield flashcard targets</strong> — they are persistent gaps that will not self-correct without deliberate review.</p>` +
+                `<div class="takeaway">Make an Anki card for every topic on this list. Review the notes and strategies from each miss to understand the pattern. These are the questions most likely to appear on your exam in some form.</div>`
+            );
+            break;
+        }
+        case 'trends': {
+            const topCombo = {};
+            rawData.forEach(d => {
+                const key = `${d.system}|${d.errorType}`;
+                topCombo[key] = (topCombo[key] || 0) + 1;
+            });
+            const topCombos = sortedEntries(topCombo).slice(0, 3).map(([key, count]) => {
+                const [sys, err] = key.split('|');
+                return { sys, err, count };
+            });
+            setConclusion('conclusion-trends', 'Key Takeaway',
+                `<p>The most dangerous combination in your data is <strong>${topCombos[0].sys} + ${topCombos[0].err}</strong> (${topCombos[0].count} occurrences). ` +
+                `This is followed by ${topCombos.slice(1).map(c => `${c.sys} + ${c.err} (${c.count})`).join(' and ')}.</p>` +
+                `<p>The patterns above reveal whether your primary bottleneck is content knowledge or test-taking technique, and which specific system-error combinations to target for maximum improvement.</p>` +
+                `<div class="takeaway">Use the strategy recommendations above as your study plan. The data has spoken — trust it over gut feeling about what to study next.</div>`
+            );
+            break;
+        }
+    }
+}
 
 // ============================================================
 // Refresh & Render All
