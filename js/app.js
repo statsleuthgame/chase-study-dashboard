@@ -3,8 +3,7 @@
 // ============================================================
 
 const SHEET_ID = 'REDACTED_SHEET_ID';
-const SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
-const TRACKER_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=IM%20Tracker`;
+const sheetUrl = (name) => `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(name)}`;
 
 let APPS_SCRIPT_URL = localStorage.getItem('appsScriptUrl') || '';
 
@@ -46,7 +45,8 @@ const ERROR_WEIGHTS = {
 };
 
 let rawData = [];
-let trackerData = [];
+let uwTrackerData = [];
+let ambTrackerData = [];
 let charts = {};
 
 // ============================================================
@@ -93,68 +93,78 @@ function parseCSV(csv) {
     return rows;
 }
 
+function parseLLJ(csv, source) {
+    const rows = parseCSV(csv);
+    return rows.slice(1)
+        .filter(row => row[0] && row[0].trim())
+        .map(row => ({
+            shelf: (row[0] || '').trim(),
+            system: normalizeSystem((row[1] || '').trim()),
+            category: (row[2] || '').trim(),
+            topic: (row[3] || '').trim(),
+            errorType: (row[4] || '').trim(),
+            notes: (row[5] || '').trim(),
+            strategy: (row[6] || '').trim(),
+            source,
+        }));
+}
+
+function parseTracker(csv) {
+    const rows = parseCSV(csv);
+    const header = (rows[0] || []).join(' ').toLowerCase();
+    if (!header.includes('date') && !header.includes('completed')) return [];
+    return rows.slice(1)
+        .filter(row => {
+            const dateVal = (row[0] || '').trim();
+            const qVal = (row[1] || '').trim();
+            return dateVal && /\d/.test(dateVal) && qVal && /^\d+$/.test(qVal);
+        })
+        .map(row => {
+            const pctStr = (row[2] || '').replace(/%/g, '').replace(/[—–-]/g, '').trim();
+            const pct = pctStr && !isNaN(parseFloat(pctStr)) ? parseFloat(pctStr) : null;
+            return {
+                date: (row[0] || '').trim(),
+                qCompleted: parseInt(row[1]) || 0,
+                pctCorrect: pct,
+                qRemaining: parseInt(row[3]) || 0,
+            };
+        })
+        .filter(r => r.qCompleted > 0);
+}
+
+async function fetchSheetCSV(name) {
+    // Try multiple URL formats for resilience
+    const urls = [sheetUrl(name), sheetUrl(name.replace(/ /g, '+'))];
+    for (const url of urls) {
+        try {
+            const resp = await fetch(url);
+            if (resp.ok) return await resp.text();
+        } catch (e) { /* try next */ }
+    }
+    return null;
+}
+
 async function fetchData() {
     try {
-        const response = await fetch(SHEET_CSV_URL);
-        if (!response.ok) throw new Error('Failed to fetch');
-        const csv = await response.text();
-        const rows = parseCSV(csv);
+        // Fetch all 4 sheets in parallel
+        const [uwLljCsv, ambLljCsv, uwTrackerCsv, ambTrackerCsv] = await Promise.all([
+            fetchSheetCSV('UW LLJ'),
+            fetchSheetCSV('Amb LLJ'),
+            fetchSheetCSV('UW Tracker'),
+            fetchSheetCSV('Amb Tracker'),
+        ]);
 
-        rawData = rows.slice(1)
-            .filter(row => row[0] && row[0].trim())
-            .map(row => ({
-                shelf: (row[0] || '').trim(),
-                system: normalizeSystem((row[1] || '').trim()),
-                category: (row[2] || '').trim(),
-                topic: (row[3] || '').trim(),
-                errorType: (row[4] || '').trim(),
-                notes: (row[5] || '').trim(),
-                strategy: (row[6] || '').trim(),
-            }));
+        // Combine both LLJs into rawData
+        const uwLlj = uwLljCsv ? parseLLJ(uwLljCsv, 'UW') : [];
+        const ambLlj = ambLljCsv ? parseLLJ(ambLljCsv, 'Amb') : [];
+        rawData = [...uwLlj, ...ambLlj];
 
-        // Fetch IM Tracker (second tab)
-        // Try multiple sheet name formats since Google Sheets can be picky
-        const trackerUrls = [
-            `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=IM+Tracker`,
-            `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=IM%20Tracker`,
-        ];
-        for (const url of trackerUrls) {
-            try {
-                const trackerResp = await fetch(url);
-                if (!trackerResp.ok) continue;
-                const trackerCsv = await trackerResp.text();
-                const trackerRows = parseCSV(trackerCsv);
-                // Check if this is actually the tracker (header should have "Date" or "Q Completed")
-                const header = (trackerRows[0] || []).join(' ').toLowerCase();
-                if (!header.includes('date') && !header.includes('completed')) continue;
+        // Parse trackers separately
+        uwTrackerData = uwTrackerCsv ? parseTracker(uwTrackerCsv) : [];
+        ambTrackerData = ambTrackerCsv ? parseTracker(ambTrackerCsv) : [];
 
-                trackerData = trackerRows.slice(1)
-                    .filter(row => {
-                        const dateVal = (row[0] || '').trim();
-                        const qVal = (row[1] || '').trim();
-                        // Must have a date-like value and a numeric question count
-                        return dateVal && /\d/.test(dateVal) && qVal && /^\d+$/.test(qVal);
-                    })
-                    .map(row => {
-                        const pctStr = (row[2] || '').replace(/%/g, '').replace(/[—–-]/g, '').trim();
-                        const pct = pctStr && !isNaN(parseFloat(pctStr)) ? parseFloat(pctStr) : null;
-                        const qCompleted = parseInt(row[1]) || 0;
-                        const qRemaining = parseInt(row[3]) || 0;
-                        return {
-                            date: (row[0] || '').trim(),
-                            qCompleted,
-                            pctCorrect: pct,
-                            qRemaining,
-                        };
-                    })
-                    .filter(r => r.qCompleted > 0);
-
-                console.log('IM Tracker loaded:', trackerData.length, 'rows');
-                break; // success, stop trying
-            } catch (e) {
-                console.warn('Tracker fetch attempt failed:', url, e);
-            }
-        }
+        console.log(`LLJ loaded: ${uwLlj.length} UW + ${ambLlj.length} Amb = ${rawData.length} total`);
+        console.log(`Trackers loaded: ${uwTrackerData.length} UW, ${ambTrackerData.length} Amb`);
 
         document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
         return rawData;
@@ -253,7 +263,7 @@ const CHART_DEFAULTS = {
 // Section display names for the content header
 const SECTION_NAMES = {
     'study-today': 'What to Study Today',
-    'im-tracker': 'IM Progress Tracker',
+    'im-tracker': 'QBank Progress',
     'overview': 'Overview',
     'pareto': 'Pareto Analysis',
     'error-analysis': 'Error Analysis',
@@ -423,81 +433,80 @@ function renderStudyToday() {
 // ============================================================
 
 function renderIMTracker() {
-    if (!trackerData.length) {
-        console.warn('No tracker data available. trackerData:', trackerData);
-        document.getElementById('tracker-total-q').textContent = 'No data';
+    // Destroy previous tracker charts so they re-render fresh
+    ['uwScore', 'uwQPerDay', 'uwCumulative', 'uwScatter', 'ambScore', 'ambQPerDay', 'ambCumulative', 'ambScatter', 'compareScore', 'compareError'].forEach(destroyChart);
+
+    // Set up sub-tab switching
+    document.querySelectorAll('.qbank-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.qbank-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.qbank-panel').forEach(p => p.classList.remove('active'));
+            tab.classList.add('active');
+            document.getElementById('qbank-' + tab.dataset.qbank).classList.add('active');
+            // Render the sub-panel charts on first view
+            if (tab.dataset.qbank === 'uw' && !charts.uwScore) renderTrackerPanel(uwTrackerData, 'uw', COLORS.blue);
+            if (tab.dataset.qbank === 'amb' && !charts.ambScore) renderTrackerPanel(ambTrackerData, 'amb', COLORS.teal);
+            if (tab.dataset.qbank === 'compare' && !charts.compareScore) renderComparison();
+        });
+    });
+
+    // Render UW by default
+    renderTrackerPanel(uwTrackerData, 'uw', COLORS.blue);
+}
+
+function renderTrackerPanel(data, prefix, color) {
+    if (!data.length) {
+        document.getElementById(prefix + '-total-q').textContent = 'No data';
         return;
     }
 
-    const labels = trackerData.map(d => d.date);
-    const scores = trackerData.map(d => d.pctCorrect);
-    const qPerDay = trackerData.map(d => d.qCompleted);
-    const remaining = trackerData.map(d => d.qRemaining);
+    const labels = data.map(d => d.date);
+    const scores = data.map(d => d.pctCorrect);
+    const qPerDay = data.map(d => d.qCompleted);
+    const remaining = data.map(d => d.qRemaining);
 
-    // Compute cumulative questions done
     let cumulative = 0;
-    const cumulativeData = trackerData.map(d => { cumulative += d.qCompleted; return cumulative; });
+    const cumulativeData = data.map(d => { cumulative += d.qCompleted; return cumulative; });
 
-    // 7-day rolling average of % correct
     const rollingAvg = scores.map((_, i) => {
-        const window = scores.slice(Math.max(0, i - 6), i + 1).filter(v => v !== null);
-        return window.length > 0 ? (window.reduce((a, b) => a + b, 0) / window.length) : null;
+        const w = scores.slice(Math.max(0, i - 6), i + 1).filter(v => v !== null);
+        return w.length > 0 ? (w.reduce((a, b) => a + b, 0) / w.length) : null;
     });
 
-    // Stats
     const totalQ = cumulativeData[cumulativeData.length - 1] || 0;
     const validScores = scores.filter(v => v !== null);
     const avgScore = validScores.length ? (validScores.reduce((a, b) => a + b, 0) / validScores.length).toFixed(1) : '--';
     const bestDay = Math.max(...qPerDay);
-    const avgQPerDay = (totalQ / trackerData.length).toFixed(1);
-    const lastRemaining = trackerData[trackerData.length - 1]?.qRemaining ?? '--';
+    const avgQPerDay = (totalQ / data.length).toFixed(1);
+    const lastRemaining = data[data.length - 1]?.qRemaining ?? '--';
     const recentScores = validScores.slice(-7);
     const recentAvg = recentScores.length ? (recentScores.reduce((a, b) => a + b, 0) / recentScores.length).toFixed(1) : '--';
     const earlyScores = validScores.slice(0, 7);
     const earlyAvg = earlyScores.length ? (earlyScores.reduce((a, b) => a + b, 0) / earlyScores.length).toFixed(1) : '--';
 
-    document.getElementById('tracker-total-q').textContent = totalQ;
-    document.getElementById('tracker-avg-score').textContent = avgScore + '%';
-    document.getElementById('tracker-avg-qday').textContent = avgQPerDay;
-    document.getElementById('tracker-best-day').textContent = bestDay;
-    document.getElementById('tracker-remaining').textContent = lastRemaining;
-    document.getElementById('tracker-recent-avg').textContent = recentAvg + '%';
-    document.getElementById('tracker-trend-dir').textContent =
+    document.getElementById(prefix + '-total-q').textContent = totalQ;
+    document.getElementById(prefix + '-avg-score').textContent = avgScore + '%';
+    document.getElementById(prefix + '-avg-qday').textContent = avgQPerDay;
+    document.getElementById(prefix + '-best-day').textContent = bestDay;
+    document.getElementById(prefix + '-remaining').textContent = lastRemaining;
+    document.getElementById(prefix + '-recent-avg').textContent = recentAvg + '%';
+    document.getElementById(prefix + '-trend-dir').textContent =
         parseFloat(recentAvg) > parseFloat(earlyAvg) ? 'Improving' :
         parseFloat(recentAvg) < parseFloat(earlyAvg) ? 'Declining' : 'Stable';
-    document.getElementById('tracker-trend-dir').style.color =
+    document.getElementById(prefix + '-trend-dir').style.color =
         parseFloat(recentAvg) > parseFloat(earlyAvg) ? COLORS.green :
         parseFloat(recentAvg) < parseFloat(earlyAvg) ? COLORS.red : COLORS.yellow;
-    document.getElementById('tracker-early-avg').textContent = `First 7 days: ${earlyAvg}% → Last 7 days: ${recentAvg}%`;
+    document.getElementById(prefix + '-early-avg').textContent = `First 7 days: ${earlyAvg}% → Last 7 days: ${recentAvg}%`;
 
-    // Score over time chart (line + rolling avg)
-    destroyChart('trackerScore');
-    charts.trackerScore = new Chart(document.getElementById('tracker-score-chart'), {
+    // Score over time
+    destroyChart(prefix + 'Score');
+    charts[prefix + 'Score'] = new Chart(document.getElementById(prefix + '-score-chart'), {
         type: 'line',
         data: {
             labels,
             datasets: [
-                {
-                    label: '% Correct',
-                    data: scores,
-                    borderColor: COLORS.blue,
-                    backgroundColor: COLORS.blue + '20',
-                    pointRadius: 3,
-                    pointBackgroundColor: COLORS.blue,
-                    borderWidth: 2,
-                    fill: true,
-                    spanGaps: true,
-                },
-                {
-                    label: '7-Day Rolling Avg',
-                    data: rollingAvg,
-                    borderColor: COLORS.yellow,
-                    borderWidth: 2,
-                    borderDash: [6, 3],
-                    pointRadius: 0,
-                    fill: false,
-                    spanGaps: true,
-                }
+                { label: '% Correct', data: scores, borderColor: color, backgroundColor: color + '20', pointRadius: 3, pointBackgroundColor: color, borderWidth: 2, fill: true, spanGaps: true },
+                { label: '7-Day Rolling Avg', data: rollingAvg, borderColor: COLORS.yellow, borderWidth: 2, borderDash: [6, 3], pointRadius: 0, fill: false, spanGaps: true }
             ]
         },
         options: {
@@ -513,94 +522,205 @@ function renderIMTracker() {
         }
     });
 
-    // Questions per day bar chart
-    destroyChart('trackerQPerDay');
-    charts.trackerQPerDay = new Chart(document.getElementById('tracker-qperday-chart'), {
+    // Questions per day
+    destroyChart(prefix + 'QPerDay');
+    charts[prefix + 'QPerDay'] = new Chart(document.getElementById(prefix + '-qperday-chart'), {
         type: 'bar',
-        data: {
-            labels,
-            datasets: [{
-                label: 'Questions Completed',
-                data: qPerDay,
-                backgroundColor: qPerDay.map(q => q >= 40 ? COLORS.green : q >= 20 ? COLORS.blue : COLORS.yellow),
-                borderRadius: 3,
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: { legend: { display: false } },
-            scales: {
-                x: { ticks: { color: CHART_DEFAULTS.textColor, maxRotation: 45, maxTicksLimit: 15 }, grid: { display: false } },
-                y: { ticks: { color: CHART_DEFAULTS.textColor }, grid: { color: CHART_DEFAULTS.gridColor } }
-            }
-        }
+        data: { labels, datasets: [{ label: 'Questions Completed', data: qPerDay, backgroundColor: qPerDay.map(q => q >= 40 ? COLORS.green : q >= 20 ? color : COLORS.yellow), borderRadius: 3 }] },
+        options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: CHART_DEFAULTS.textColor, maxRotation: 45, maxTicksLimit: 15 }, grid: { display: false } }, y: { ticks: { color: CHART_DEFAULTS.textColor }, grid: { color: CHART_DEFAULTS.gridColor } } } }
     });
 
-    // Cumulative progress + remaining
-    destroyChart('trackerCumulative');
-    charts.trackerCumulative = new Chart(document.getElementById('tracker-cumulative-chart'), {
+    // Cumulative progress
+    destroyChart(prefix + 'Cumulative');
+    charts[prefix + 'Cumulative'] = new Chart(document.getElementById(prefix + '-cumulative-chart'), {
         type: 'line',
-        data: {
-            labels,
-            datasets: [
-                {
-                    label: 'Questions Completed (Cumulative)',
-                    data: cumulativeData,
-                    borderColor: COLORS.green,
-                    backgroundColor: COLORS.green + '15',
-                    borderWidth: 2,
-                    fill: true,
-                    pointRadius: 2,
-                },
-                {
-                    label: 'Questions Remaining',
-                    data: remaining,
-                    borderColor: COLORS.red,
-                    backgroundColor: COLORS.red + '10',
-                    borderWidth: 2,
-                    fill: true,
-                    pointRadius: 2,
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            plugins: { legend: { position: 'bottom', labels: { color: CHART_DEFAULTS.textColor } } },
-            scales: {
-                x: { ticks: { color: CHART_DEFAULTS.textColor, maxRotation: 45, maxTicksLimit: 15 }, grid: { display: false } },
-                y: { ticks: { color: CHART_DEFAULTS.textColor }, grid: { color: CHART_DEFAULTS.gridColor } }
-            }
-        }
+        data: { labels, datasets: [
+            { label: 'Questions Completed (Cumulative)', data: cumulativeData, borderColor: COLORS.green, backgroundColor: COLORS.green + '15', borderWidth: 2, fill: true, pointRadius: 2 },
+            { label: 'Questions Remaining', data: remaining, borderColor: COLORS.red, backgroundColor: COLORS.red + '10', borderWidth: 2, fill: true, pointRadius: 2 }
+        ] },
+        options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: CHART_DEFAULTS.textColor } } }, scales: { x: { ticks: { color: CHART_DEFAULTS.textColor, maxRotation: 45, maxTicksLimit: 15 }, grid: { display: false } }, y: { ticks: { color: CHART_DEFAULTS.textColor }, grid: { color: CHART_DEFAULTS.gridColor } } } }
     });
 
     // Score vs Volume scatter
-    const scatterData = trackerData
-        .filter(d => d.pctCorrect !== null)
-        .map(d => ({ x: d.qCompleted, y: d.pctCorrect }));
-
-    destroyChart('trackerScatter');
-    charts.trackerScatter = new Chart(document.getElementById('tracker-scatter-chart'), {
+    destroyChart(prefix + 'Scatter');
+    charts[prefix + 'Scatter'] = new Chart(document.getElementById(prefix + '-scatter-chart'), {
         type: 'scatter',
-        data: {
-            datasets: [{
-                label: 'Score vs Volume',
-                data: scatterData,
-                backgroundColor: COLORS.purple + '80',
-                borderColor: COLORS.purple,
-                pointRadius: 5,
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: { display: false },
-                tooltip: { callbacks: { label: ctx => `${ctx.raw.x} questions → ${ctx.raw.y}% correct` } }
-            },
-            scales: {
-                x: { title: { display: true, text: 'Questions/Day', color: CHART_DEFAULTS.textColor }, ticks: { color: CHART_DEFAULTS.textColor }, grid: { color: CHART_DEFAULTS.gridColor } },
-                y: { title: { display: true, text: '% Correct', color: CHART_DEFAULTS.textColor }, min: 30, max: 100, ticks: { color: CHART_DEFAULTS.textColor, callback: v => v + '%' }, grid: { color: CHART_DEFAULTS.gridColor } }
+        data: { datasets: [{ label: 'Score vs Volume', data: data.filter(d => d.pctCorrect !== null).map(d => ({ x: d.qCompleted, y: d.pctCorrect })), backgroundColor: color + '80', borderColor: color, pointRadius: 5 }] },
+        options: { responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `${ctx.raw.x} questions → ${ctx.raw.y}% correct` } } }, scales: { x: { title: { display: true, text: 'Questions/Day', color: CHART_DEFAULTS.textColor }, ticks: { color: CHART_DEFAULTS.textColor }, grid: { color: CHART_DEFAULTS.gridColor } }, y: { title: { display: true, text: '% Correct', color: CHART_DEFAULTS.textColor }, min: 30, max: 100, ticks: { color: CHART_DEFAULTS.textColor, callback: v => v + '%' }, grid: { color: CHART_DEFAULTS.gridColor } } } }
+    });
+}
+
+function renderComparison() {
+    const container = document.getElementById('compare-content');
+    const uwValid = uwTrackerData.map(d => d.pctCorrect).filter(v => v !== null);
+    const ambValid = ambTrackerData.map(d => d.pctCorrect).filter(v => v !== null);
+    const uwAvg = uwValid.length ? (uwValid.reduce((a, b) => a + b, 0) / uwValid.length) : 0;
+    const ambAvg = ambValid.length ? (ambValid.reduce((a, b) => a + b, 0) / ambValid.length) : 0;
+    const uwTotal = uwTrackerData.reduce((s, d) => s + d.qCompleted, 0);
+    const ambTotal = ambTrackerData.reduce((s, d) => s + d.qCompleted, 0);
+    const diff = ambAvg - uwAvg;
+    const improved = diff > 0;
+
+    // Weak area comparison: find systems with errors in both UW and Amb LLJ
+    const uwLljData = rawData.filter(d => d.source === 'UW');
+    const ambLljData = rawData.filter(d => d.source === 'Amb');
+    const uwSystems = countBy(uwLljData, 'system');
+    const ambSystems = countBy(ambLljData, 'system');
+
+    // Get UW weak systems (sorted by misses) and compare to Amb
+    const weakAreaComparison = sortedEntries(uwSystems).map(([sys, uwCount]) => {
+        const ambCount = ambSystems[sys] || 0;
+        const uwRate = uwLljData.length > 0 ? ((uwCount / uwLljData.length) * 100).toFixed(1) : 0;
+        const ambRate = ambLljData.length > 0 ? ((ambCount / ambLljData.length) * 100).toFixed(1) : 0;
+        return { system: sys, uwCount, ambCount, uwRate: parseFloat(uwRate), ambRate: parseFloat(ambRate), change: parseFloat(ambRate) - parseFloat(uwRate) };
+    }).filter(s => s.uwCount >= 2); // only show systems with meaningful UW data
+
+    // Error type comparison
+    const uwErrors = countBy(uwLljData, 'errorType');
+    const ambErrors = countBy(ambLljData, 'errorType');
+    const errorComparison = sortedEntries(uwErrors).map(([err, uwCount]) => {
+        const ambCount = ambErrors[err] || 0;
+        const uwPct = uwLljData.length > 0 ? ((uwCount / uwLljData.length) * 100).toFixed(1) : 0;
+        const ambPct = ambLljData.length > 0 ? ((ambCount / ambLljData.length) * 100).toFixed(1) : 0;
+        return { error: err, uwCount, ambCount, uwPct: parseFloat(uwPct), ambPct: parseFloat(ambPct) };
+    });
+
+    container.innerHTML = `
+        <!-- Overall Comparison Stats -->
+        <div class="compare-hero">
+            <div class="compare-hero-card">
+                <div class="compare-hero-label">UWorld Average</div>
+                <div class="compare-hero-value" style="color:${COLORS.blue}">${uwAvg.toFixed(1)}%</div>
+                <div class="compare-hero-sub">${uwTotal} questions over ${uwTrackerData.length} days</div>
+            </div>
+            <div class="compare-hero-arrow ${improved ? 'arrow-up' : 'arrow-down'}">
+                <span class="compare-arrow-text">${improved ? '+' : ''}${diff.toFixed(1)}%</span>
+            </div>
+            <div class="compare-hero-card">
+                <div class="compare-hero-label">Amboss Average</div>
+                <div class="compare-hero-value" style="color:${COLORS.teal}">${ambAvg.toFixed(1)}%</div>
+                <div class="compare-hero-sub">${ambTotal} questions over ${ambTrackerData.length} days</div>
+            </div>
+        </div>
+
+        <div class="compare-verdict ${improved ? 'verdict-improved' : 'verdict-declined'}">
+            ${improved
+                ? `Your Amboss average is <strong>${diff.toFixed(1)} percentage points higher</strong> than UWorld. The UWorld foundation is paying off — you retained material and are performing better on a different qbank.`
+                : diff < -3
+                ? `Your Amboss average is <strong>${Math.abs(diff).toFixed(1)} points lower</strong> than UWorld. This is expected — Amboss questions are subjectively harder per Reddit feedback, and you're seeing new question styles. Focus on the weak area analysis below to close remaining gaps.`
+                : `Your Amboss average is within <strong>${Math.abs(diff).toFixed(1)} points</strong> of UWorld — essentially holding steady. You're maintaining your level on a different (and often harder) question bank.`
             }
-        }
+        </div>
+
+        <!-- Score Rolling Average Overlay -->
+        <div class="chart-container full-width" style="margin-bottom:24px;">
+            <h3>Score Trajectory: UWorld vs Amboss (7-Day Rolling Avg)</h3>
+            <canvas id="compare-score-chart"></canvas>
+        </div>
+
+        <!-- Weak Area Comparison -->
+        ${weakAreaComparison.length > 0 && ambLljData.length > 0 ? `
+        <h3 class="subsection-title">Weak Area Progress: Did You Close the Gaps?</h3>
+        <p class="section-subtitle">Comparing the % of errors each system represents — a lower Amb % means you improved in that area</p>
+        <div class="table-wrapper" style="margin-bottom:24px;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>System</th>
+                        <th>UW Misses</th>
+                        <th>UW Error %</th>
+                        <th>Amb Misses</th>
+                        <th>Amb Error %</th>
+                        <th>Change</th>
+                        <th>Verdict</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${weakAreaComparison.map(s => {
+                        const changeColor = s.change < -2 ? COLORS.green : s.change > 2 ? COLORS.red : COLORS.yellow;
+                        const verdict = s.ambCount === 0 ? 'No Amb data' : s.change < -2 ? 'Improved' : s.change > 2 ? 'Still weak' : 'Stable';
+                        const verdictClass = s.ambCount === 0 ? '' : s.change < -2 ? 'verdict-improved' : s.change > 2 ? 'verdict-declined' : 'verdict-stable';
+                        return `<tr>
+                            <td><strong>${s.system}</strong></td>
+                            <td style="text-align:center">${s.uwCount}</td>
+                            <td style="text-align:center">${s.uwRate}%</td>
+                            <td style="text-align:center">${s.ambCount}</td>
+                            <td style="text-align:center">${s.ambRate}%</td>
+                            <td style="text-align:center;color:${changeColor};font-weight:700">${s.change > 0 ? '+' : ''}${s.change.toFixed(1)}%</td>
+                            <td><span class="compare-verdict-badge ${verdictClass}">${verdict}</span></td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>` : ambLljData.length === 0 ? '<p style="color:var(--text-muted);padding:20px;">Amb LLJ data will appear here once you start logging missed questions in Amboss.</p>' : ''}
+
+        <!-- Error Type Comparison -->
+        ${errorComparison.length > 0 && ambLljData.length > 0 ? `
+        <h3 class="subsection-title">Error Type Evolution</h3>
+        <p class="section-subtitle">How your error pattern changed from UWorld to Amboss</p>
+        <div class="chart-container full-width">
+            <canvas id="compare-error-chart"></canvas>
+        </div>` : ''}
+    `;
+
+    // Render score overlay chart
+    if (uwValid.length > 0 || ambValid.length > 0) {
+        const uwRolling = computeRollingAvg(uwTrackerData.map(d => d.pctCorrect), 7);
+        const ambRolling = computeRollingAvg(ambTrackerData.map(d => d.pctCorrect), 7);
+        // Use question number as x-axis for fair comparison
+        const maxLen = Math.max(uwRolling.length, ambRolling.length);
+        const xLabels = Array.from({ length: maxLen }, (_, i) => `Day ${i + 1}`);
+
+        destroyChart('compareScore');
+        charts.compareScore = new Chart(document.getElementById('compare-score-chart'), {
+            type: 'line',
+            data: {
+                labels: xLabels,
+                datasets: [
+                    { label: 'UWorld (7-Day Avg)', data: uwRolling, borderColor: COLORS.blue, borderWidth: 3, pointRadius: 0, fill: false, spanGaps: true },
+                    { label: 'Amboss (7-Day Avg)', data: ambRolling, borderColor: COLORS.teal, borderWidth: 3, pointRadius: 0, fill: false, spanGaps: true },
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'bottom', labels: { color: CHART_DEFAULTS.textColor } }, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.raw !== null ? ctx.raw.toFixed(1) + '%' : '--'}` } } },
+                scales: {
+                    x: { ticks: { color: CHART_DEFAULTS.textColor, maxTicksLimit: 15 }, grid: { display: false } },
+                    y: { min: 30, max: 100, ticks: { color: CHART_DEFAULTS.textColor, callback: v => v + '%' }, grid: { color: CHART_DEFAULTS.gridColor } }
+                }
+            }
+        });
+    }
+
+    // Error type comparison chart
+    if (ambLljData.length > 0 && document.getElementById('compare-error-chart')) {
+        const errLabels = errorComparison.map(e => e.error);
+        destroyChart('compareError');
+        charts.compareError = new Chart(document.getElementById('compare-error-chart'), {
+            type: 'bar',
+            data: {
+                labels: errLabels,
+                datasets: [
+                    { label: 'UWorld %', data: errorComparison.map(e => e.uwPct), backgroundColor: COLORS.blue + '90', borderRadius: 4 },
+                    { label: 'Amboss %', data: errorComparison.map(e => e.ambPct), backgroundColor: COLORS.teal + '90', borderRadius: 4 },
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'bottom', labels: { color: CHART_DEFAULTS.textColor } } },
+                scales: {
+                    x: { ticks: { color: CHART_DEFAULTS.textColor, font: { size: 10 } }, grid: { display: false } },
+                    y: { ticks: { color: CHART_DEFAULTS.textColor, callback: v => v + '%' }, grid: { color: CHART_DEFAULTS.gridColor } }
+                }
+            }
+        });
+    }
+}
+
+function computeRollingAvg(scores, window) {
+    return scores.map((_, i) => {
+        const w = scores.slice(Math.max(0, i - window + 1), i + 1).filter(v => v !== null);
+        return w.length > 0 ? (w.reduce((a, b) => a + b, 0) / w.length) : null;
     });
 }
 
@@ -1688,8 +1808,9 @@ document.getElementById('entry-form').addEventListener('submit', async (e) => {
     const btn = document.getElementById('submit-btn');
     if (!ensureAppsScriptUrl(msgEl)) return;
 
+    const lljSource = document.getElementById('form-llj-source').value;
     const entry = {
-        type: 'missed-question',
+        type: lljSource === 'amb' ? 'amb-missed-question' : 'missed-question',
         shelf: document.getElementById('form-shelf').value,
         system: document.getElementById('form-system').value,
         category: document.getElementById('form-category').value,
@@ -1738,8 +1859,9 @@ document.getElementById('tracker-form').addEventListener('submit', async (e) => 
     const d = new Date(dateInput + 'T00:00:00');
     const dateFormatted = `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`;
 
+    const trackerType = document.getElementById('tracker-qbank-select').value;
     const entry = {
-        type: 'im-tracker',
+        type: trackerType === 'amb' ? 'amb-tracker' : 'uw-tracker',
         date: dateFormatted,
         qCompleted: parseInt(document.getElementById('tracker-q-completed').value) || 0,
         pctCorrect: document.getElementById('tracker-pct-correct').value + '%',
@@ -1813,26 +1935,33 @@ function renderConclusion(sectionId) {
             break;
         }
         case 'im-tracker': {
-            if (!trackerData.length) {
+            if (!uwTrackerData.length && !ambTrackerData.length) {
                 setConclusion('conclusion-im-tracker', 'Key Takeaway', '<p>No tracker data available yet.</p>');
                 break;
             }
-            const validScores = trackerData.map(d => d.pctCorrect).filter(v => v !== null);
-            const avgScore = validScores.length ? (validScores.reduce((a, b) => a + b, 0) / validScores.length).toFixed(1) : '0';
-            const recentScores = validScores.slice(-7);
-            const earlyScores = validScores.slice(0, 7);
-            const recentAvg = recentScores.length ? (recentScores.reduce((a, b) => a + b, 0) / recentScores.length).toFixed(1) : '0';
-            const earlyAvg = earlyScores.length ? (earlyScores.reduce((a, b) => a + b, 0) / earlyScores.length).toFixed(1) : '0';
-            const improving = parseFloat(recentAvg) > parseFloat(earlyAvg);
-            const diff = Math.abs(parseFloat(recentAvg) - parseFloat(earlyAvg)).toFixed(1);
-            const totalQ = trackerData.reduce((s, d) => s + d.qCompleted, 0);
-            const lastRemaining = trackerData[trackerData.length - 1]?.qRemaining ?? 0;
-            setConclusion('conclusion-im-tracker', 'Key Takeaway',
-                `<p>Over <strong>${trackerData.length} study days</strong>, you completed <strong>${totalQ} questions</strong> with an overall average of <strong>${avgScore}%</strong>. ` +
-                `Your score has <strong>${improving ? 'improved' : 'declined'} by ${diff} percentage points</strong> comparing your first week (${earlyAvg}%) to your most recent week (${recentAvg}%).</p>` +
-                `<p>${lastRemaining === 0 ? 'You have completed the entire IM question bank — great work!' : `You have <strong>${lastRemaining} questions remaining</strong> in the bank.`}</p>` +
-                `<div class="takeaway">${improving ? 'Your scores are trending upward — the practice is working. Keep the current pace and focus on weak areas identified in other tabs.' : 'Your recent scores are lower than your early scores. Consider whether you are rushing through questions or if you need to revisit foundational content in your weakest systems.'}</div>`
-            );
+            const uwValid = uwTrackerData.map(d => d.pctCorrect).filter(v => v !== null);
+            const ambValid = ambTrackerData.map(d => d.pctCorrect).filter(v => v !== null);
+            const uwAvg = uwValid.length ? (uwValid.reduce((a, b) => a + b, 0) / uwValid.length) : 0;
+            const ambAvg = ambValid.length ? (ambValid.reduce((a, b) => a + b, 0) / ambValid.length) : 0;
+            const uwTotal = uwTrackerData.reduce((s, d) => s + d.qCompleted, 0);
+            const ambTotal = ambTrackerData.reduce((s, d) => s + d.qCompleted, 0);
+            const scoreDiff = ambAvg - uwAvg;
+
+            let body = `<p>Across both question banks: <strong>${uwTotal + ambTotal} total questions</strong> completed (${uwTotal} UWorld, ${ambTotal} Amboss).</p>`;
+            if (uwValid.length > 0) body += `<p>UWorld average: <strong>${uwAvg.toFixed(1)}%</strong> over ${uwTrackerData.length} days.</p>`;
+            if (ambValid.length > 0) {
+                body += `<p>Amboss average: <strong>${ambAvg.toFixed(1)}%</strong> over ${ambTrackerData.length} days. `;
+                if (uwValid.length > 0) {
+                    body += scoreDiff > 0
+                        ? `That's <strong>${scoreDiff.toFixed(1)} points higher</strong> than UWorld — the foundation is paying off.`
+                        : scoreDiff < -3
+                        ? `That's ${Math.abs(scoreDiff).toFixed(1)} points lower than UWorld, but Amboss is known to be harder. Check the Comparison tab for weak area analysis.`
+                        : `Essentially on par with UWorld — you're maintaining performance on a different qbank.`;
+                }
+                body += '</p>';
+            }
+            body += `<div class="takeaway">Use the Comparison tab to see if your UWorld weak areas improved in Amboss, and identify any remaining gaps to target.</div>`;
+            setConclusion('conclusion-im-tracker', 'Key Takeaway', body);
             break;
         }
         case 'overview': {

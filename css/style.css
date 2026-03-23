@@ -1398,6 +1398,177 @@ table tbody tr:hover {
 }
 
 /* ============================================================
+   QBank Tabs & Comparison
+   ============================================================ */
+
+.qbank-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 24px;
+    background: var(--bg-card);
+    border-radius: var(--radius-md);
+    padding: 4px;
+    border: 1px solid var(--border);
+    width: fit-content;
+}
+
+.qbank-tab {
+    padding: 10px 24px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+}
+
+.qbank-tab:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.qbank-tab.active {
+    background: var(--accent);
+    color: white;
+}
+
+.qbank-tab-compare {
+    border-left: 1px solid var(--border);
+    margin-left: 4px;
+    padding-left: 24px;
+}
+
+.qbank-tab-compare.active {
+    background: linear-gradient(135deg, #3b82f6, #14b8a6);
+}
+
+.qbank-panel {
+    display: none;
+}
+
+.qbank-panel.active {
+    display: block;
+}
+
+/* Comparison Components */
+
+.compare-hero {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+
+.compare-hero-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    padding: 28px 36px;
+    text-align: center;
+    border: 1px solid var(--border);
+    min-width: 200px;
+    flex: 1;
+    max-width: 300px;
+}
+
+.compare-hero-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+.compare-hero-value {
+    font-size: 2.2rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.compare-hero-sub {
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    margin-top: 6px;
+}
+
+.compare-hero-arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 16px;
+}
+
+.compare-arrow-text {
+    font-size: 1.4rem;
+    font-weight: 800;
+}
+
+.arrow-up .compare-arrow-text { color: var(--success); }
+.arrow-down .compare-arrow-text { color: var(--danger); }
+
+.compare-hero-arrow::before {
+    content: '';
+    width: 40px;
+    height: 3px;
+    border-radius: 2px;
+}
+
+.arrow-up::before { background: var(--success); }
+.arrow-down::before { background: var(--danger); }
+
+.compare-verdict {
+    padding: 16px 20px;
+    border-radius: var(--radius-md);
+    font-size: 0.88rem;
+    line-height: 1.6;
+    margin-bottom: 28px;
+    font-weight: 500;
+}
+
+.compare-verdict strong { color: var(--text-primary); }
+
+.verdict-improved {
+    background: var(--success-muted);
+    border: 1px solid rgba(34, 197, 94, 0.25);
+    color: #86efac;
+}
+
+.verdict-declined {
+    background: var(--warning-muted);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    color: #fcd34d;
+}
+
+.compare-verdict-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.compare-verdict-badge.verdict-improved {
+    background: var(--success-muted);
+    color: var(--success);
+}
+
+.compare-verdict-badge.verdict-declined {
+    background: var(--danger-muted);
+    color: var(--danger);
+}
+
+.compare-verdict-badge.verdict-stable {
+    background: var(--warning-muted);
+    color: var(--warning);
+}
+
+/* ============================================================
    Topic Depth Reports
    ============================================================ */
 
