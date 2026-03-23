@@ -93,12 +93,24 @@ function parseCSV(csv) {
     return rows;
 }
 
+const VALID_SHELVES = ['IM', 'FM', 'EM', 'PED', 'OB', 'AMB', 'SURG', 'PSYCH'];
+
 function parseLLJ(csv, source) {
     const rows = parseCSV(csv);
+    // Validate header looks like an LLJ (not a tracker)
+    const header = (rows[0] || []).join(' ').toLowerCase();
+    if (header.includes('q completed') || header.includes('% correct') || header.includes('q/day')) {
+        console.warn(`parseLLJ(${source}): got tracker data instead of LLJ, skipping`);
+        return [];
+    }
     return rows.slice(1)
-        .filter(row => row[0] && row[0].trim())
+        .filter(row => {
+            const shelf = (row[0] || '').trim().toUpperCase();
+            // Must have a valid shelf, system, and topic — prevents tracker rows from being parsed as LLJ
+            return shelf && VALID_SHELVES.includes(shelf) && (row[1] || '').trim() && (row[3] || '').trim();
+        })
         .map(row => ({
-            shelf: (row[0] || '').trim(),
+            shelf: (row[0] || '').trim().toUpperCase(),
             system: normalizeSystem((row[1] || '').trim()),
             category: (row[2] || '').trim(),
             topic: (row[3] || '').trim(),
@@ -163,8 +175,10 @@ async function fetchData() {
         uwTrackerData = uwTrackerCsv ? parseTracker(uwTrackerCsv) : [];
         ambTrackerData = ambTrackerCsv ? parseTracker(ambTrackerCsv) : [];
 
+        console.log(`Sheets fetched — UW LLJ: ${uwLljCsv ? 'yes' : 'no'}, Amb LLJ: ${ambLljCsv ? 'yes' : 'no'}, UW Tracker: ${uwTrackerCsv ? 'yes' : 'no'}, Amb Tracker: ${ambTrackerCsv ? 'yes' : 'no'}`);
         console.log(`LLJ loaded: ${uwLlj.length} UW + ${ambLlj.length} Amb = ${rawData.length} total`);
         console.log(`Trackers loaded: ${uwTrackerData.length} UW, ${ambTrackerData.length} Amb`);
+        if (rawData.length > 0) console.log('Sample LLJ entry:', JSON.stringify(rawData[0]));
 
         document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
         return rawData;
