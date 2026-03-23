@@ -233,13 +233,14 @@ function getRepeatTopics() {
     rawData.forEach(d => {
         const key = d.topic.toLowerCase();
         if (!topicCounts[key]) {
-            topicCounts[key] = { topic: d.topic, count: 0, shelves: new Set(), systems: new Set(), errors: new Set(), categories: new Set() };
+            topicCounts[key] = { topic: d.topic, count: 0, shelves: new Set(), systems: new Set(), errors: new Set(), categories: new Set(), entries: [] };
         }
         topicCounts[key].count++;
         topicCounts[key].shelves.add(d.shelf);
         topicCounts[key].systems.add(d.system);
         topicCounts[key].errors.add(d.errorType);
         topicCounts[key].categories.add(d.category);
+        topicCounts[key].entries.push(d);
     });
     return Object.values(topicCounts).filter(t => t.count >= 2).sort((a, b) => b.count - a.count);
 }
@@ -258,7 +259,7 @@ const SECTION_NAMES = {
     'error-analysis': 'Error Analysis',
     'systems': 'Systems Breakdown',
     'shelves': 'Shelf Performance',
-    'repeat-topics': 'Repeat Topics',
+    'repeat-topics': 'Topic Depth Reports',
     'trends': 'Trends & Insights',
     'entries': 'All Entries',
     'add-entry': 'Add New Entry',
@@ -1269,17 +1270,264 @@ function renderRepeatTopics() {
         });
     }
 
-    // Detail table
-    document.getElementById('repeat-topics-tbody').innerHTML = repeats.map(t => `
-        <tr>
-            <td><strong>${t.topic}</strong></td>
-            <td style="text-align:center;"><strong style="color:${t.count >= 3 ? COLORS.red : COLORS.yellow}">${t.count}</strong></td>
-            <td>${[...t.shelves].join(', ')}</td>
-            <td>${[...t.systems].join(', ')}</td>
-            <td>${[...t.errors].map(e => `<span class="error-badge ${getErrorBadgeClass(e)}">${e}</span>`).join(' ')}</td>
-            <td>${[...t.categories].join(', ')}</td>
-        </tr>
-    `).join('') || '<tr><td colspan="6" style="text-align:center;color:#64748b;">No repeat topics found yet</td></tr>';
+    // Clickable topic cards grid
+    const grid = document.getElementById('depth-topic-grid');
+    grid.innerHTML = repeats.map((t, i) => {
+        const knowledgeCount = t.entries.filter(e => isKnowledgeError(e.errorType)).length;
+        const cognitiveCount = t.entries.filter(e => isCognitiveError(e.errorType)).length;
+        const severity = t.count >= 3 ? 'high' : 'medium';
+        return `
+            <div class="depth-topic-card depth-severity-${severity} animate-in" data-topic-index="${i}">
+                <div class="depth-topic-card-top">
+                    <span class="depth-miss-count">${t.count}x</span>
+                    <span class="depth-severity-tag">${t.count >= 3 ? 'Critical' : 'Review'}</span>
+                </div>
+                <h4 class="depth-topic-name">${t.topic}</h4>
+                <div class="depth-topic-tags">
+                    ${[...t.systems].map(s => `<span class="depth-sys-tag">${s}</span>`).join('')}
+                </div>
+                <div class="depth-topic-split">
+                    <span class="depth-split-kg" title="Knowledge gaps">${knowledgeCount} knowledge</span>
+                    <span class="depth-split-cog" title="Cognitive errors">${cognitiveCount} reasoning</span>
+                </div>
+                <div class="depth-topic-cta">View Depth Report &rarr;</div>
+            </div>
+        `;
+    }).join('') || '<p style="color:var(--text-muted);text-align:center;padding:40px;">No repeat topics found yet. Topics missed 2+ times will appear here with depth reports.</p>';
+
+    // Attach click handlers
+    grid.querySelectorAll('.depth-topic-card').forEach(card => {
+        card.addEventListener('click', () => {
+            const idx = parseInt(card.dataset.topicIndex);
+            showDepthReport(repeats[idx]);
+        });
+    });
+
+    // Back button
+    document.getElementById('depth-back-btn').addEventListener('click', () => {
+        document.getElementById('depth-report-panel').style.display = 'none';
+        grid.style.display = '';
+    });
+}
+
+function showDepthReport(topic) {
+    const grid = document.getElementById('depth-topic-grid');
+    const panel = document.getElementById('depth-report-panel');
+    grid.style.display = 'none';
+    panel.style.display = 'block';
+
+    // Header
+    document.getElementById('depth-report-title').textContent = topic.topic;
+    document.getElementById('depth-report-meta').innerHTML = `
+        <span class="depth-meta-badge depth-meta-count">${topic.count} times missed</span>
+        ${[...topic.shelves].map(s => `<span class="depth-meta-badge">${s}</span>`).join('')}
+        ${[...topic.systems].map(s => `<span class="depth-meta-badge depth-meta-system">${s}</span>`).join('')}
+    `;
+
+    const content = document.getElementById('depth-report-content');
+    const entries = topic.entries;
+    const knowledgeEntries = entries.filter(e => isKnowledgeError(e.errorType));
+    const cognitiveEntries = entries.filter(e => isCognitiveError(e.errorType));
+
+    // 1. YOUR KNOWLEDGE GAPS — what you missed and why
+    const notesWithContent = entries.filter(e => e.notes && e.notes.trim());
+    const strategiesWithContent = entries.filter(e => e.strategy && e.strategy.trim());
+
+    // 2. RELATED TOPICS — other topics in same system/category they might also be weak on
+    const relatedTopics = findRelatedTopics(topic);
+
+    // 3. BUILD the report
+    content.innerHTML = `
+        <!-- Section 1: Your Documented Knowledge Gaps -->
+        <div class="depth-section">
+            <h4 class="depth-section-title depth-title-red">Your Knowledge Gaps</h4>
+            <p class="depth-section-desc">Every time you missed this topic — what went wrong and what you noted</p>
+            <div class="depth-entries-list">
+                ${entries.map((e, i) => `
+                    <div class="depth-entry-card">
+                        <div class="depth-entry-header">
+                            <span class="depth-entry-num">Miss #${i + 1}</span>
+                            <span class="error-badge ${getErrorBadgeClass(e.errorType)}">${e.errorType}</span>
+                            <span class="depth-entry-context">${e.shelf} / ${e.system} / ${e.category}</span>
+                        </div>
+                        ${e.notes && e.notes.trim() ? `<div class="depth-entry-notes"><strong>What you didn't know:</strong> ${e.notes}</div>` : '<div class="depth-entry-notes" style="color:var(--text-muted);">No notes recorded</div>'}
+                        ${e.strategy && e.strategy.trim() ? `<div class="depth-entry-strategy"><strong>Strategy:</strong> ${e.strategy}</div>` : ''}
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+
+        <!-- Section 2: Error Pattern Analysis -->
+        <div class="depth-section">
+            <h4 class="depth-section-title depth-title-yellow">Error Pattern Analysis</h4>
+            <p class="depth-section-desc">How your misses break down — helps you target the right fix</p>
+            <div class="depth-pattern-grid">
+                <div class="depth-pattern-card">
+                    <div class="depth-pattern-number" style="color:${COLORS.red}">${knowledgeEntries.length}</div>
+                    <div class="depth-pattern-label">Knowledge Gaps</div>
+                    <div class="depth-pattern-hint">${knowledgeEntries.length > 0 ? 'You need content review' : 'Not a content problem'}</div>
+                </div>
+                <div class="depth-pattern-card">
+                    <div class="depth-pattern-number" style="color:${COLORS.yellow}">${cognitiveEntries.length}</div>
+                    <div class="depth-pattern-label">Reasoning Errors</div>
+                    <div class="depth-pattern-hint">${cognitiveEntries.length > 0 ? 'Practice question technique' : 'Not a reasoning problem'}</div>
+                </div>
+                <div class="depth-pattern-card">
+                    <div class="depth-pattern-number" style="color:${COLORS.purple}">${topic.systems.size}</div>
+                    <div class="depth-pattern-label">Systems Affected</div>
+                    <div class="depth-pattern-hint">${topic.systems.size > 1 ? 'Cross-system gap — foundational concept' : 'Isolated to one system'}</div>
+                </div>
+                <div class="depth-pattern-card">
+                    <div class="depth-pattern-number" style="color:${COLORS.blue}">${topic.categories.size}</div>
+                    <div class="depth-pattern-label">Categories</div>
+                    <div class="depth-pattern-hint">${[...topic.categories].join(', ')}</div>
+                </div>
+            </div>
+            ${knowledgeEntries.length > cognitiveEntries.length
+                ? `<div class="depth-verdict verdict-knowledge">This topic is primarily a <strong>content gap</strong>. You need to study the material — doing more practice questions without reviewing content first will not fix this.</div>`
+                : cognitiveEntries.length > knowledgeEntries.length
+                ? `<div class="depth-verdict verdict-cognitive">This topic is primarily a <strong>reasoning problem</strong>. You likely know some of the material but are making technique errors. Practice slowing down and reading the full vignette before answering.</div>`
+                : `<div class="depth-verdict verdict-mixed">This topic has a <strong>mixed pattern</strong> — both knowledge gaps and reasoning errors. Review the content AND practice deliberate question technique.</div>`
+            }
+        </div>
+
+        <!-- Section 3: Consolidated Study Notes -->
+        ${notesWithContent.length > 0 || strategiesWithContent.length > 0 ? `
+        <div class="depth-section">
+            <h4 class="depth-section-title depth-title-green">Consolidated Study Guide</h4>
+            <p class="depth-section-desc">All your notes and strategies for this topic in one place — review before your next session</p>
+            ${notesWithContent.length > 0 ? `
+            <div class="depth-study-block">
+                <h5>What You Need to Know</h5>
+                <ul class="depth-study-list">
+                    ${notesWithContent.map(e => `<li>${e.notes}</li>`).join('')}
+                </ul>
+            </div>` : ''}
+            ${strategiesWithContent.length > 0 ? `
+            <div class="depth-study-block">
+                <h5>How to Approach It Next Time</h5>
+                <ul class="depth-study-list">
+                    ${strategiesWithContent.map(e => `<li>${e.strategy}</li>`).join('')}
+                </ul>
+            </div>` : ''}
+        </div>` : ''}
+
+        <!-- Section 4: Potential Blind Spots -->
+        <div class="depth-section">
+            <h4 class="depth-section-title depth-title-purple">Potential Blind Spots</h4>
+            <p class="depth-section-desc">Other topics in the same system and category that you've also missed — if you're weak here, you might be weak on these too</p>
+            ${relatedTopics.length > 0 ? `
+            <div class="depth-related-grid">
+                ${relatedTopics.map(r => `
+                    <div class="depth-related-card">
+                        <div class="depth-related-header">
+                            <strong>${r.topic}</strong>
+                            <span class="depth-related-count">${r.count}x missed</span>
+                        </div>
+                        <div class="depth-related-context">${r.system} / ${r.category}</div>
+                        <div class="depth-related-errors">${[...r.errors].map(e => `<span class="error-badge ${getErrorBadgeClass(e)}">${e}</span>`).join(' ')}</div>
+                        ${r.hasNotes ? `<div class="depth-related-note">${r.sampleNote}</div>` : ''}
+                    </div>
+                `).join('')}
+            </div>
+            <div class="depth-blindspot-tip">These topics share the same system or category. If the board tests you on <strong>${topic.topic}</strong>, they could just as easily test you on any of these. Consider reviewing them together as a block.</div>
+            ` : '<p style="color:var(--text-muted);">No closely related topics found in your missed questions. This topic may be more isolated.</p>'}
+        </div>
+
+        <!-- Section 5: Board Strategy -->
+        <div class="depth-section">
+            <h4 class="depth-section-title depth-title-blue">Board Strategy</h4>
+            <p class="depth-section-desc">How to leverage this for the exam and real clinical use</p>
+            <div class="depth-board-tips">
+                ${generateBoardStrategy(topic, relatedTopics)}
+            </div>
+        </div>
+    `;
+
+    // Scroll to top of panel
+    document.querySelector('.content').scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function findRelatedTopics(topic) {
+    const topicKey = topic.topic.toLowerCase();
+    const systems = [...topic.systems];
+    const categories = [...topic.categories];
+
+    // Find other entries that share the same system or category but are different topics
+    const related = {};
+    rawData.forEach(d => {
+        const dKey = d.topic.toLowerCase();
+        if (dKey === topicKey) return; // skip self
+        if (systems.includes(d.system) || categories.includes(d.category)) {
+            if (!related[dKey]) {
+                related[dKey] = { topic: d.topic, count: 0, system: d.system, category: d.category, errors: new Set(), notes: [], hasNotes: false, sampleNote: '' };
+            }
+            related[dKey].count++;
+            related[dKey].errors.add(d.errorType);
+            if (d.notes && d.notes.trim()) {
+                related[dKey].hasNotes = true;
+                if (!related[dKey].sampleNote) related[dKey].sampleNote = d.notes;
+            }
+        }
+    });
+
+    return Object.values(related)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 8);
+}
+
+function generateBoardStrategy(topic, relatedTopics) {
+    const tips = [];
+    const entries = topic.entries;
+    const knowledgeEntries = entries.filter(e => isKnowledgeError(e.errorType));
+    const cognitiveEntries = entries.filter(e => isCognitiveError(e.errorType));
+    const systems = [...topic.systems];
+    const categories = [...topic.categories];
+
+    // Severity-based tips
+    if (topic.count >= 4) {
+        tips.push({ icon: '!!', cls: 'tip-critical', text: `You've missed this <strong>${topic.count} times</strong>. This is a critical gap. Block out dedicated time to master this topic — don't just re-read, actively test yourself until you can explain it without notes.` });
+    } else if (topic.count >= 3) {
+        tips.push({ icon: '!', cls: 'tip-warning', text: `Missed <strong>${topic.count} times</strong>. This is beyond a one-off mistake. It's a pattern that needs targeted intervention before exam day.` });
+    }
+
+    // Knowledge-specific tips
+    if (knowledgeEntries.length > 0) {
+        tips.push({ icon: 'K', cls: 'tip-knowledge', text: `<strong>Content to master:</strong> Review the core pathophysiology, presentation, and management of ${topic.topic}. Focus on the details you got wrong: ${knowledgeEntries.filter(e => e.notes?.trim()).map(e => `"${e.notes}"`).join('; ') || 'review your notes from each miss above'}.` });
+    }
+
+    // Cognitive-specific tips
+    if (cognitiveEntries.length > 0) {
+        const cogTypes = [...new Set(cognitiveEntries.map(e => e.errorType))];
+        const cogAdvice = {
+            'Anchoring Bias': 'read the ENTIRE vignette before committing to a diagnosis',
+            'Premature conclusion': 'use process of elimination — cross out wrong answers before picking right ones',
+            'Hidden Hook Failure': 'circle every unexpected lab value or clinical finding — the hook is often buried',
+            'Right map / wrong order': 'review the clinical algorithm step-by-step before answering',
+            'Misunderstood vinnet': 'slow down and re-read the last line of the question stem — what are they actually asking?',
+        };
+        tips.push({ icon: 'T', cls: 'tip-technique', text: `<strong>Technique fix:</strong> For ${topic.topic}, your reasoning errors were: ${cogTypes.join(', ')}. Next time: ${cogTypes.map(t => cogAdvice[t] || 'apply systematic question technique').join('; ')}.` });
+    }
+
+    // Cross-system tip
+    if (topic.systems.size > 1) {
+        tips.push({ icon: 'X', cls: 'tip-cross', text: `This topic spans <strong>${systems.join(' and ')}</strong>. Expect the board to test it from different angles. Make sure you understand how ${topic.topic} presents differently across systems.` });
+    }
+
+    // Related topics tip
+    if (relatedTopics.length > 2) {
+        tips.push({ icon: 'R', cls: 'tip-related', text: `You have <strong>${relatedTopics.length} related weak topics</strong> in the same area. Consider studying this as a topical block: ${topic.topic}, ${relatedTopics.slice(0, 3).map(r => r.topic).join(', ')}. The board often tests related concepts back-to-back.` });
+    }
+
+    // What other questions might look like
+    tips.push({ icon: 'Q', cls: 'tip-questions', text: `<strong>Expect questions like:</strong> The board can test ${topic.topic} as a diagnosis question (classic presentation), a next-best-step question (management), a "what's the mechanism" question (pathophysiology), or a "what complication would you expect" question. If you've only seen it one way, practice approaching it from the other angles.` });
+
+    return tips.map(t => `
+        <div class="depth-tip ${t.cls}">
+            <span class="depth-tip-icon">${t.icon}</span>
+            <div class="depth-tip-text">${t.text}</div>
+        </div>
+    `).join('');
 }
 
 // ============================================================
@@ -1332,13 +1580,13 @@ function renderTrends() {
 
     // Strategies
     const strategies = [];
-    if ((errorCounts['Knowledge gap'] || 0) > 20) strategies.push('Make Anki cards for every knowledge gap topic — spaced repetition is the most efficient way to fill content gaps');
+    if ((errorCounts['Knowledge gap'] || 0) > 20) strategies.push('Review depth reports for your knowledge gap topics — use the consolidated study guide to master the content before doing more questions');
     if ((errorCounts['Anchoring Bias'] || 0) > 10) strategies.push('Before selecting an answer, ask: "What else could explain ALL findings?" — break the anchor');
     if ((errorCounts['Premature conclusion'] || 0) > 5) strategies.push('Use process of elimination on every question — cross out wrong answers before picking the right one');
     if ((errorCounts['Hidden Hook Failure'] || 0) > 5) strategies.push('Circle unusual lab values and unexpected findings — these are often the key to the question');
     if ((errorCounts['Wrong Algorithm'] || 0) > 5) strategies.push('Review clinical decision algorithms for your top systems (treatment hierarchies, diagnostic workups)');
     strategies.push(`Focus study time on: ${top3.map(e => e[0]).join(', ')}`);
-    if (repeats.length > 0) strategies.push(`Make dedicated flashcards for repeat topics: ${repeats.slice(0, 3).map(t => t.topic).join(', ')}`);
+    if (repeats.length > 0) strategies.push(`Review depth reports for repeat topics: ${repeats.slice(0, 3).map(t => t.topic).join(', ')} — see Topic Depth Reports tab`);
 
     document.getElementById('strategy-list').innerHTML = strategies.map(s => `<li>${s}</li>`).join('');
 }
@@ -1678,16 +1926,17 @@ function renderConclusion(sectionId) {
         }
         case 'repeat-topics': {
             if (repeats.length === 0) {
-                setConclusion('conclusion-repeat-topics', 'Key Takeaway', '<p>No repeat topics found yet. As you log more missed questions, topics that come up multiple times will appear here.</p>');
+                setConclusion('conclusion-repeat-topics', 'Key Takeaway', '<p>No repeat topics found yet. As you log more missed questions, topics that come up multiple times will appear here with full depth reports.</p>');
                 break;
             }
             const topRepeat = repeats[0];
             const multiSystemRepeats = repeats.filter(t => t.systems.size > 1);
+            const totalRelatedGaps = repeats.reduce((sum, t) => sum + findRelatedTopics(t).length, 0);
             setConclusion('conclusion-repeat-topics', 'Key Takeaway',
                 `<p><strong>${repeats.length} topics</strong> have been missed 2 or more times. The most repeated is <strong>${topRepeat.topic}</strong> (${topRepeat.count} times across ${[...topRepeat.shelves].join(', ')}). ` +
-                `${multiSystemRepeats.length > 0 ? `<strong>${multiSystemRepeats.length}</strong> repeat topics appear across multiple systems, suggesting foundational concept gaps rather than isolated misses.` : ''}</p>` +
-                `<p>These repeat topics represent your <strong>highest-yield flashcard targets</strong> — they are persistent gaps that will not self-correct without deliberate review.</p>` +
-                `<div class="takeaway">Make an Anki card for every topic on this list. Review the notes and strategies from each miss to understand the pattern. These are the questions most likely to appear on your exam in some form.</div>`
+                `${multiSystemRepeats.length > 0 ? `<strong>${multiSystemRepeats.length}</strong> repeat topics span multiple systems, suggesting foundational concept gaps.` : ''}</p>` +
+                `<p>Click any topic card below for a full depth report — your specific knowledge gaps, error patterns, related blind spots you might also be weak on, and board strategy.</p>` +
+                `<div class="takeaway">These are not just flashcard targets — they're your highest-yield deep-review topics. Each depth report consolidates everything you need to master the topic and cover related blind spots the practice questions haven't tested yet.</div>`
             );
             break;
         }

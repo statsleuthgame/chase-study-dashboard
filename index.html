@@ -36,7 +36,7 @@
             <li><a href="#" class="nav-link" data-section="error-analysis">Error Analysis</a></li>
             <li><a href="#" class="nav-link" data-section="systems">Systems Breakdown</a></li>
             <li><a href="#" class="nav-link" data-section="shelves">Shelf Performance</a></li>
-            <li><a href="#" class="nav-link" data-section="repeat-topics">Repeat Topics</a></li>
+            <li><a href="#" class="nav-link" data-section="repeat-topics">Topic Depth Reports</a></li>
             <li><a href="#" class="nav-link" data-section="trends">Trends & Insights</a></li>
             <li><a href="#" class="nav-link" data-section="entries">All Entries</a></li>
             <li><a href="#" class="nav-link" data-section="add-entry">+ Add Entry</a></li>
@@ -373,8 +373,8 @@
 
         <!-- REPEAT TOPICS -->
         <section id="repeat-topics" class="section">
-            <h2>Repeat Topics</h2>
-            <p class="section-subtitle">Topics missed more than once — your highest-yield review targets</p>
+            <h2>Topic Depth Reports</h2>
+            <p class="section-subtitle">Click any weak topic for a full depth report — your knowledge gaps, error patterns, related blind spots, and board strategy</p>
             <div class="section-conclusion" id="conclusion-repeat-topics"></div>
 
             <div class="chart-row">
@@ -384,20 +384,15 @@
                 </div>
             </div>
 
-            <div class="table-wrapper animate-in">
-                <table id="repeat-topics-table">
-                    <thead>
-                        <tr>
-                            <th>Topic</th>
-                            <th>Times Missed</th>
-                            <th>Shelves</th>
-                            <th>Systems</th>
-                            <th>Error Types</th>
-                            <th>Categories</th>
-                        </tr>
-                    </thead>
-                    <tbody id="repeat-topics-tbody"></tbody>
-                </table>
+            <div class="depth-topic-grid" id="depth-topic-grid"></div>
+
+            <div class="depth-report-panel" id="depth-report-panel" style="display:none;">
+                <div class="depth-report-header">
+                    <button class="depth-back-btn" id="depth-back-btn">&larr; All Topics</button>
+                    <h3 class="depth-report-title" id="depth-report-title"></h3>
+                    <div class="depth-report-meta" id="depth-report-meta"></div>
+                </div>
+                <div class="depth-report-content" id="depth-report-content"></div>
             </div>
         </section>
 
