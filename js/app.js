@@ -189,29 +189,39 @@ async function fetchData() {
     }
 }
 
+// Canonical system names and keywords that identify them
+const CANONICAL_SYSTEMS = [
+    { name: 'Gastrointestinal & Nutrition', keys: ['gastrointestinal', 'gi', 'nutrition'] },
+    { name: 'Renal & Electrolytes', keys: ['renal', 'urinary', 'electrolyte'] },
+    { name: 'Rheumatology/Orthopedics & Sports', keys: ['rheumatol', 'orthoped', 'ortho', 'sports med'] },
+    { name: 'Nervous System', keys: ['nervous'] },
+    { name: 'Pulmonary & Critical Care', keys: ['pulmonary', 'critical care'] },
+    { name: 'Endocrine, Diabetes & Metabolism', keys: ['endocrin', 'diabetes', 'metabolism'] },
+    { name: 'Cardiovascular', keys: ['cardiovascular', 'cardio'] },
+    { name: 'Hematology & Oncology', keys: ['hematol', 'oncol'] },
+    { name: 'Infectious Diseases', keys: ['infectious'] },
+    { name: 'Allergy & Immunology', keys: ['allergy', 'immunol'] },
+    { name: 'Dermatology', keys: ['dermatol'] },
+    { name: 'ENT', keys: ['ear, nose', 'ent', 'throat'] },
+    { name: 'Male Reproductive', keys: ['male repro'] },
+    { name: 'Female Reproductive', keys: ['female repro', 'gynecol'] },
+    { name: 'Social Sciences', keys: ['social science', 'ethics/legal', 'ethics'] },
+    { name: 'Poisoning & Environmental', keys: ['poison', 'environmental'] },
+    { name: 'Miscellaneous', keys: ['miscellaneous'] },
+    { name: 'Pregnancy & Childbirth', keys: ['pregnan', 'childbirth', 'puerperium', 'obstetric'] },
+    { name: 'Psychiatric/Behavioral & Substance Use', keys: ['psychiatr', 'behavioral', 'substance use'] },
+    { name: 'Biostatistics & Epidemiology', keys: ['biostatistic', 'epidemiol'] },
+    { name: 'Ophthalmology', keys: ['ophthalmol'] },
+];
+
 function normalizeSystem(system) {
-    const lower = system.toLowerCase();
-    const map = {
-        'gastrointestinal and nutrition': 'Gastrointestinal and Nutrition',
-        'renal, urinary systems and electrolytes': 'Renal & Electrolytes',
-        'rheumatology / orthopedics and sports': 'Rheumatology & Ortho',
-        'nervous system': 'Nervous System',
-        'pulmonary and critical care': 'Pulmonary & Critical Care',
-        'endocrine, diabetes and metabolism': 'Endocrine & Metabolism',
-        'cardiovascular system': 'Cardiovascular',
-        'hematology and oncology': 'Hematology & Oncology',
-        'infectious diseases': 'Infectious Diseases',
-        'allergy and immunology': 'Allergy & Immunology',
-        'dermatology': 'Dermatology',
-        'ear, nose, throat (ent)': 'ENT',
-        'male reproductive system': 'Male Reproductive',
-        'social sciences (ethics/legal/prof)': 'Social Sciences',
-        'social sciences (ethics/legal/prof...)': 'Social Sciences',
-        'poisening and environmental exposure': 'Poisoning & Environmental',
-        'miscellaneous': 'Miscellaneous',
-        'pregnancy, childbirth & puerperium': 'Pregnancy & Childbirth',
-    };
-    return map[lower] || system;
+    if (!system) return system;
+    const lower = system.toLowerCase().replace(/[.…]+$/, '').trim();
+    // Find the canonical name by keyword match
+    for (const canon of CANONICAL_SYSTEMS) {
+        if (canon.keys.some(k => lower.includes(k))) return canon.name;
+    }
+    return system;
 }
 
 // ============================================================
@@ -468,6 +478,46 @@ function renderIMTracker() {
     renderTrackerPanel(uwTrackerData, 'uw', COLORS.blue);
 }
 
+function bucketByQuestions(data, bucketSize) {
+    const buckets = [];
+    let remaining = 0;       // weighted correct sum carried into current bucket
+    let filled = 0;          // questions accumulated in current bucket
+    let startDate = data[0]?.date;
+
+    for (const day of data) {
+        if (day.pctCorrect === null || day.qCompleted <= 0) continue;
+        let dayLeft = day.qCompleted;
+        const dayRate = day.pctCorrect;
+
+        while (dayLeft > 0) {
+            const space = bucketSize - filled;
+            const take = Math.min(dayLeft, space);
+            remaining += take * dayRate;
+            filled += take;
+            dayLeft -= take;
+
+            if (filled >= bucketSize) {
+                const label = startDate === day.date ? day.date : `${startDate}–${day.date}`;
+                buckets.push({ label, score: remaining / filled, qCount: filled });
+                remaining = 0;
+                filled = 0;
+                startDate = dayLeft > 0 ? day.date : null;
+            }
+        }
+        if (filled > 0 && !startDate) startDate = day.date;
+        if (filled === 0) startDate = null;
+    }
+    // Final partial bucket
+    if (filled > 0) {
+        const lastDate = data[data.length - 1].date;
+        const label = startDate === lastDate ? lastDate : `${startDate}–${lastDate}`;
+        buckets.push({ label, score: remaining / filled, qCount: filled });
+    }
+    return buckets;
+}
+
+const SCORE_BUCKET_SIZE = 40;
+
 function renderTrackerPanel(data, prefix, color) {
     if (!data.length) {
         document.getElementById(prefix + '-total-q').textContent = 'No data';
@@ -481,6 +531,15 @@ function renderTrackerPanel(data, prefix, color) {
 
     let cumulative = 0;
     const cumulativeData = data.map(d => { cumulative += d.qCompleted; return cumulative; });
+
+    // Volume-normalized buckets for score chart
+    const buckets = bucketByQuestions(data, SCORE_BUCKET_SIZE);
+    const bucketLabels = buckets.map(b => b.label);
+    const bucketScores = buckets.map(b => b.score);
+    const bucketRollingAvg = bucketScores.map((_, i) => {
+        const w = bucketScores.slice(Math.max(0, i - 4), i + 1).filter(v => v !== null);
+        return w.length > 0 ? (w.reduce((a, b) => a + b, 0) / w.length) : null;
+    });
 
     const rollingAvg = scores.map((_, i) => {
         const w = scores.slice(Math.max(0, i - 6), i + 1).filter(v => v !== null);
@@ -512,22 +571,31 @@ function renderTrackerPanel(data, prefix, color) {
         parseFloat(recentAvg) < parseFloat(earlyAvg) ? COLORS.red : COLORS.yellow;
     document.getElementById(prefix + '-early-avg').textContent = `First 7 days: ${earlyAvg}% → Last 7 days: ${recentAvg}%`;
 
-    // Score over time
+    // Score over time (volume-normalized: 1 point per N questions)
     destroyChart(prefix + 'Score');
     charts[prefix + 'Score'] = new Chart(document.getElementById(prefix + '-score-chart'), {
         type: 'line',
         data: {
-            labels,
+            labels: bucketLabels,
             datasets: [
-                { label: '% Correct', data: scores, borderColor: color, backgroundColor: color + '20', pointRadius: 3, pointBackgroundColor: color, borderWidth: 2, fill: true, spanGaps: true },
-                { label: '7-Day Rolling Avg', data: rollingAvg, borderColor: COLORS.yellow, borderWidth: 2, borderDash: [6, 3], pointRadius: 0, fill: false, spanGaps: true }
+                { label: `% Correct (per ${SCORE_BUCKET_SIZE}Q)`, data: bucketScores, borderColor: color, backgroundColor: color + '20', pointRadius: 4, pointBackgroundColor: color, borderWidth: 2, fill: true, spanGaps: true },
+                { label: '5-Bucket Rolling Avg', data: bucketRollingAvg, borderColor: COLORS.yellow, borderWidth: 2, borderDash: [6, 3], pointRadius: 0, fill: false, spanGaps: true }
             ]
         },
         options: {
             responsive: true,
             plugins: {
                 legend: { position: 'bottom', labels: { color: CHART_DEFAULTS.textColor } },
-                tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.raw !== null ? ctx.raw.toFixed(1) + '%' : 'Rest day'}` } }
+                tooltip: { callbacks: {
+                    label: ctx => {
+                        const val = ctx.raw !== null ? ctx.raw.toFixed(1) + '%' : 'No data';
+                        if (ctx.datasetIndex === 0) {
+                            const b = buckets[ctx.dataIndex];
+                            return `${ctx.dataset.label}: ${val} (${b.qCount}Q)`;
+                        }
+                        return `${ctx.dataset.label}: ${val}`;
+                    }
+                } }
             },
             scales: {
                 x: { ticks: { color: CHART_DEFAULTS.textColor, maxRotation: 45, maxTicksLimit: 15 }, grid: { display: false } },
