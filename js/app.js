@@ -16,32 +16,29 @@ const COLORS = {
 const PALETTE = Object.values(COLORS);
 
 const ERROR_COLORS = {
-    'Knowledge gap': COLORS.red,
+    'Knowledge Gap': COLORS.red,
     'Anchoring Bias': COLORS.yellow,
-    'Premature conclusion': COLORS.purple,
-    'Hidden Hook Failure': COLORS.blue,
-    'Right map / wrong order': COLORS.teal,
-    'Wrong Algorithm': COLORS.pink,
-    'Dumb mistake': COLORS.slate,
-    'Misunderstood vinnet': COLORS.orange,
+    'Premature Conclusion': COLORS.purple,
+    "Didn't Recognize Presentation": COLORS.blue,
+    'Mixed Up Dx': COLORS.pink,
+    'Forgot Anki Card': COLORS.teal,
+    'Dumb Mistake': COLORS.slate,
 };
 
 // Knowledge errors vs cognitive/reasoning errors
-const KNOWLEDGE_ERRORS = ['Knowledge gap', 'Wrong Algorithm'];
-const COGNITIVE_ERRORS = ['Anchoring Bias', 'Premature conclusion', 'Hidden Hook Failure',
-    'Right map / wrong order', 'Misunderstood vinnet'];
-const LOW_WEIGHT_ERRORS = ['Dumb mistake'];
+const KNOWLEDGE_ERRORS = ['Knowledge Gap', 'Mixed Up Dx', 'Forgot Anki Card'];
+const COGNITIVE_ERRORS = ['Anchoring Bias', 'Premature Conclusion', "Didn't Recognize Presentation"];
+const LOW_WEIGHT_ERRORS = ['Dumb Mistake'];
 
 // Severity weights for priority scoring
 const ERROR_WEIGHTS = {
-    'Knowledge gap': 3,
-    'Wrong Algorithm': 3,
-    'Hidden Hook Failure': 2,
+    'Knowledge Gap': 3,
+    'Mixed Up Dx': 2.5,
+    'Forgot Anki Card': 2,
+    "Didn't Recognize Presentation": 2,
     'Anchoring Bias': 1.5,
-    'Premature conclusion': 1.5,
-    'Misunderstood vinnet': 1.5,
-    'Right map / wrong order': 1.5,
-    'Dumb mistake': 0.5,
+    'Premature Conclusion': 1.5,
+    'Dumb Mistake': 0.5,
 };
 
 let rawData = [];
@@ -114,7 +111,7 @@ function parseLLJ(csv, source) {
             system: normalizeSystem((row[1] || '').trim()),
             category: (row[2] || '').trim(),
             topic: (row[3] || '').trim(),
-            errorType: (row[4] || '').trim(),
+            errorType: normalizeErrorType((row[4] || '').trim()),
             notes: (row[5] || '').trim(),
             strategy: (row[6] || '').trim(),
             source,
@@ -224,6 +221,31 @@ function normalizeSystem(system) {
     return system;
 }
 
+function normalizeErrorType(error) {
+    if (!error) return error;
+    const lower = error.toLowerCase().trim();
+    const map = {
+        // Old types that map to Knowledge Gap
+        'wrong algorithm': 'Knowledge Gap',
+        'right map / wrong order': 'Knowledge Gap',
+        // Old types that map to Didn't Recognize Presentation
+        'hidden hook failure': "Didn't Recognize Presentation",
+        'misunderstood vinnet': "Didn't Recognize Presentation",
+        'misunderstood vignette': "Didn't Recognize Presentation",
+        "didnt recognize presentation": "Didn't Recognize Presentation",
+        "didn't recognize presentation": "Didn't Recognize Presentation",
+        // Normalize casing
+        'knowledge gap': 'Knowledge Gap',
+        'mixed up dx': 'Mixed Up Dx',
+        'anchor bias': 'Anchoring Bias',
+        'anchoring bias': 'Anchoring Bias',
+        'forgot anki card': 'Forgot Anki Card',
+        'dumb mistake': 'Dumb Mistake',
+        'premature conclusion': 'Premature Conclusion',
+    };
+    return map[lower] || error;
+}
+
 // ============================================================
 // Utilities
 // ============================================================
@@ -243,10 +265,10 @@ function sortedEntries(obj) {
 
 function getErrorBadgeClass(errorType) {
     const map = {
-        'Knowledge gap': 'knowledge-gap', 'Anchoring Bias': 'anchoring-bias',
-        'Premature conclusion': 'premature-conclusion', 'Hidden Hook Failure': 'hidden-hook',
-        'Right map / wrong order': 'wrong-order', 'Wrong Algorithm': 'wrong-algorithm',
-        'Dumb mistake': 'dumb-mistake', 'Misunderstood vinnet': 'misunderstood',
+        'Knowledge Gap': 'knowledge-gap', 'Anchoring Bias': 'anchoring-bias',
+        'Premature Conclusion': 'premature-conclusion', "Didn't Recognize Presentation": 'hidden-hook',
+        'Mixed Up Dx': 'wrong-algorithm', 'Forgot Anki Card': 'wrong-order',
+        'Dumb Mistake': 'dumb-mistake',
     };
     return map[errorType] || '';
 }
@@ -1703,10 +1725,8 @@ function generateBoardStrategy(topic, relatedTopics) {
         const cogTypes = [...new Set(cognitiveEntries.map(e => e.errorType))];
         const cogAdvice = {
             'Anchoring Bias': 'read the ENTIRE vignette before committing to a diagnosis',
-            'Premature conclusion': 'use process of elimination — cross out wrong answers before picking right ones',
-            'Hidden Hook Failure': 'circle every unexpected lab value or clinical finding — the hook is often buried',
-            'Right map / wrong order': 'review the clinical algorithm step-by-step before answering',
-            'Misunderstood vinnet': 'slow down and re-read the last line of the question stem — what are they actually asking?',
+            'Premature Conclusion': 'use process of elimination — cross out wrong answers before picking right ones',
+            "Didn't Recognize Presentation": 'slow down and re-read the vignette — identify the classic presentation pattern before answering',
         };
         tips.push({ icon: 'T', cls: 'tip-technique', text: `<strong>Technique fix:</strong> For ${topic.topic}, your reasoning errors were: ${cogTypes.join(', ')}. Next time: ${cogTypes.map(t => cogAdvice[t] || 'apply systematic question technique').join('; ')}.` });
     }
@@ -1760,13 +1780,13 @@ function renderTrends() {
 
     // Patterns
     const patterns = [];
-    const kgPct = ((errorCounts['Knowledge gap'] || 0) / total * 100).toFixed(0);
+    const kgPct = ((rawData.filter(d => isKnowledgeError(d.errorType)).length / total) * 100).toFixed(0);
     const cogPct = ((rawData.filter(d => isCognitiveError(d.errorType)).length / total) * 100).toFixed(0);
 
     if (kgPct > 30) patterns.push(`Knowledge gaps are ${kgPct}% of all errors — content review is your #1 priority`);
     if (cogPct > 30) patterns.push(`Cognitive errors are ${cogPct}% of misses — invest in test-taking strategy, not just studying more`);
 
-    const biasPct = (((errorCounts['Anchoring Bias'] || 0) + (errorCounts['Premature conclusion'] || 0)) / total * 100).toFixed(0);
+    const biasPct = (((errorCounts['Anchoring Bias'] || 0) + (errorCounts['Premature Conclusion'] || 0)) / total * 100).toFixed(0);
     if (biasPct > 15) patterns.push(`Anchoring + premature conclusions = ${biasPct}% — practice reading full vignettes before answering`);
 
     const top3 = sortedSystems.slice(0, 3);
@@ -1782,11 +1802,11 @@ function renderTrends() {
 
     // Strategies
     const strategies = [];
-    if ((errorCounts['Knowledge gap'] || 0) > 20) strategies.push('Review depth reports for your knowledge gap topics — use the consolidated study guide to master the content before doing more questions');
+    if ((errorCounts['Knowledge Gap'] || 0) > 20) strategies.push('Review depth reports for your knowledge gap topics — use the consolidated study guide to master the content before doing more questions');
     if ((errorCounts['Anchoring Bias'] || 0) > 10) strategies.push('Before selecting an answer, ask: "What else could explain ALL findings?" — break the anchor');
-    if ((errorCounts['Premature conclusion'] || 0) > 5) strategies.push('Use process of elimination on every question — cross out wrong answers before picking the right one');
-    if ((errorCounts['Hidden Hook Failure'] || 0) > 5) strategies.push('Circle unusual lab values and unexpected findings — these are often the key to the question');
-    if ((errorCounts['Wrong Algorithm'] || 0) > 5) strategies.push('Review clinical decision algorithms for your top systems (treatment hierarchies, diagnostic workups)');
+    if ((errorCounts['Premature Conclusion'] || 0) > 5) strategies.push('Use process of elimination on every question — cross out wrong answers before picking the right one');
+    if ((errorCounts["Didn't Recognize Presentation"] || 0) > 5) strategies.push("Slow down and re-read the vignette — identify the classic presentation pattern before jumping to an answer");
+    if ((errorCounts['Mixed Up Dx'] || 0) > 5) strategies.push('Make a quick differential list before picking — Mixed Up Dx errors mean you knew the right disease but picked the wrong one');
     strategies.push(`Focus study time on: ${top3.map(e => e[0]).join(', ')}`);
     if (repeats.length > 0) strategies.push(`Review depth reports for repeat topics: ${repeats.slice(0, 3).map(t => t.topic).join(', ')} — see Topic Depth Reports tab`);
 
@@ -2082,7 +2102,7 @@ function renderConclusion(sectionId) {
         }
         case 'error-analysis': {
             const topError = sortedErrors[0];
-            const biasCount = (errorCounts['Anchoring Bias'] || 0) + (errorCounts['Premature conclusion'] || 0);
+            const biasCount = (errorCounts['Anchoring Bias'] || 0) + (errorCounts['Premature Conclusion'] || 0);
             const biasPct = ((biasCount / total) * 100).toFixed(0);
             // Find which system has the most concentrated error type
             const errorSystemPairs = [];
