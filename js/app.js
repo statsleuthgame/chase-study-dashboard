@@ -90,7 +90,7 @@ function parseCSV(csv) {
     return rows;
 }
 
-const VALID_SHELVES = ['IM', 'FM', 'EM', 'PED', 'OB', 'AMB', 'SURG', 'PSYCH'];
+const VALID_SHELVES = ['IM', 'FM', 'EM', 'PED', 'OB', 'AMB', 'SURG', 'SRG', 'PSYCH', 'NEU'];
 
 function parseLLJ(csv, source) {
     const rows = parseCSV(csv);
@@ -100,22 +100,42 @@ function parseLLJ(csv, source) {
         console.warn(`parseLLJ(${source}): got tracker data instead of LLJ, skipping`);
         return [];
     }
+    // Detect column layout: does the header have a "category" column?
+    const hasCategory = header.includes('category');
+    console.log(`parseLLJ(${source}): hasCategory=${hasCategory}, header="${header}"`);
     return rows.slice(1)
         .filter(row => {
             const shelf = (row[0] || '').trim().toUpperCase();
-            // Must have a valid shelf, system, and topic — prevents tracker rows from being parsed as LLJ
-            return shelf && VALID_SHELVES.includes(shelf) && (row[1] || '').trim() && (row[3] || '').trim();
+            const topicIdx = hasCategory ? 3 : 2;
+            return shelf && VALID_SHELVES.includes(shelf) && (row[1] || '').trim() && (row[topicIdx] || '').trim();
         })
-        .map(row => ({
-            shelf: (row[0] || '').trim().toUpperCase(),
-            system: normalizeSystem((row[1] || '').trim()),
-            category: (row[2] || '').trim(),
-            topic: (row[3] || '').trim(),
-            errorType: normalizeErrorType((row[4] || '').trim()),
-            notes: (row[5] || '').trim(),
-            strategy: (row[6] || '').trim(),
-            source,
-        }));
+        .map(row => {
+            if (hasCategory) {
+                // Columns: Shelf, System, Category, Topic, ErrorType, Notes, Strategy
+                return {
+                    shelf: (row[0] || '').trim().toUpperCase(),
+                    system: normalizeSystem((row[1] || '').trim()),
+                    category: (row[2] || '').trim(),
+                    topic: (row[3] || '').trim(),
+                    errorType: normalizeErrorType((row[4] || '').trim()),
+                    notes: (row[5] || '').trim(),
+                    strategy: (row[6] || '').trim(),
+                    source,
+                };
+            } else {
+                // Columns: Shelf, System, Topic, ErrorType, Notes, Strategy
+                return {
+                    shelf: (row[0] || '').trim().toUpperCase(),
+                    system: normalizeSystem((row[1] || '').trim()),
+                    category: '',
+                    topic: (row[2] || '').trim(),
+                    errorType: normalizeErrorType((row[3] || '').trim()),
+                    notes: (row[4] || '').trim(),
+                    strategy: (row[5] || '').trim(),
+                    source,
+                };
+            }
+        });
 }
 
 function parseTracker(csv) {
