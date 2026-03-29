@@ -718,7 +718,7 @@ function renderComparison() {
 
         <!-- Score Rolling Average Overlay -->
         <div class="chart-container full-width" style="margin-bottom:24px;">
-            <h3>Score Trajectory: UWorld vs Amboss (7-Day Rolling Avg)</h3>
+            <h3>Score Trajectory: UWorld vs Amboss (per ${SCORE_BUCKET_SIZE} Questions)</h3>
             <canvas id="compare-score-chart"></canvas>
         </div>
 
@@ -767,13 +767,22 @@ function renderComparison() {
         </div>` : ''}
     `;
 
-    // Render score overlay chart
+    // Render score overlay chart (volume-normalized buckets)
     if (uwValid.length > 0 || ambValid.length > 0) {
-        const uwRolling = computeRollingAvg(uwTrackerData.map(d => d.pctCorrect), 7);
-        const ambRolling = computeRollingAvg(ambTrackerData.map(d => d.pctCorrect), 7);
-        // Use question number as x-axis for fair comparison
+        const uwBuckets = bucketByQuestions(uwTrackerData, SCORE_BUCKET_SIZE);
+        const ambBuckets = bucketByQuestions(ambTrackerData, SCORE_BUCKET_SIZE);
+        const uwBucketScores = uwBuckets.map(b => b.score);
+        const ambBucketScores = ambBuckets.map(b => b.score);
+        const uwRolling = uwBucketScores.map((_, i) => {
+            const w = uwBucketScores.slice(Math.max(0, i - 4), i + 1).filter(v => v !== null);
+            return w.length > 0 ? (w.reduce((a, b) => a + b, 0) / w.length) : null;
+        });
+        const ambRolling = ambBucketScores.map((_, i) => {
+            const w = ambBucketScores.slice(Math.max(0, i - 4), i + 1).filter(v => v !== null);
+            return w.length > 0 ? (w.reduce((a, b) => a + b, 0) / w.length) : null;
+        });
         const maxLen = Math.max(uwRolling.length, ambRolling.length);
-        const xLabels = Array.from({ length: maxLen }, (_, i) => `Day ${i + 1}`);
+        const xLabels = Array.from({ length: maxLen }, (_, i) => `Q${i * SCORE_BUCKET_SIZE + 1}–${(i + 1) * SCORE_BUCKET_SIZE}`);
 
         destroyChart('compareScore');
         charts.compareScore = new Chart(document.getElementById('compare-score-chart'), {
@@ -781,8 +790,8 @@ function renderComparison() {
             data: {
                 labels: xLabels,
                 datasets: [
-                    { label: 'UWorld (7-Day Avg)', data: uwRolling, borderColor: COLORS.blue, borderWidth: 3, pointRadius: 0, fill: false, spanGaps: true },
-                    { label: 'Amboss (7-Day Avg)', data: ambRolling, borderColor: COLORS.teal, borderWidth: 3, pointRadius: 0, fill: false, spanGaps: true },
+                    { label: `UWorld (${SCORE_BUCKET_SIZE}Q Rolling Avg)`, data: uwRolling, borderColor: COLORS.blue, borderWidth: 3, pointRadius: 0, fill: false, spanGaps: true },
+                    { label: `Amboss (${SCORE_BUCKET_SIZE}Q Rolling Avg)`, data: ambRolling, borderColor: COLORS.teal, borderWidth: 3, pointRadius: 0, fill: false, spanGaps: true },
                 ]
             },
             options: {
