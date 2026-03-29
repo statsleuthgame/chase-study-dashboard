@@ -94,48 +94,44 @@ const VALID_SHELVES = ['IM', 'FM', 'EM', 'PED', 'OB', 'AMB', 'SURG', 'SRG', 'PSY
 
 function parseLLJ(csv, source) {
     const rows = parseCSV(csv);
+    if (!rows.length) return [];
+    const headerRow = rows[0] || [];
     // Validate header looks like an LLJ (not a tracker)
-    const header = (rows[0] || []).join(' ').toLowerCase();
-    if (header.includes('q completed') || header.includes('% correct') || header.includes('q/day')) {
+    const headerJoined = headerRow.join(' ').toLowerCase();
+    if (headerJoined.includes('q completed') || headerJoined.includes('% correct') || headerJoined.includes('q/day')) {
         console.warn(`parseLLJ(${source}): got tracker data instead of LLJ, skipping`);
         return [];
     }
-    // Detect column layout: does the header have a "category" column?
-    const hasCategory = header.includes('category');
-    console.log(`parseLLJ(${source}): hasCategory=${hasCategory}, header="${header}"`);
+    // Map columns by header name (handles blank spacer columns, reordering, etc.)
+    const colMap = {};
+    headerRow.forEach((h, i) => {
+        const lc = h.toLowerCase().trim();
+        if (lc === 'shelf') colMap.shelf = i;
+        else if (lc === 'system') colMap.system = i;
+        else if (lc === 'category') colMap.category = i;
+        else if (lc === 'topic') colMap.topic = i;
+        else if (lc.includes('why') || lc.includes('miss')) colMap.errorType = i;
+        else if (lc === 'notes') colMap.notes = i;
+        else if (lc.includes('strategy')) colMap.strategy = i;
+    });
+    console.log(`parseLLJ(${source}): colMap=`, JSON.stringify(colMap), `header="${headerRow.join('","')}"`);
+    const col = (row, key) => (row[colMap[key]] || '').trim();
+
     return rows.slice(1)
         .filter(row => {
-            const shelf = (row[0] || '').trim().toUpperCase();
-            const topicIdx = hasCategory ? 3 : 2;
-            return shelf && VALID_SHELVES.includes(shelf) && (row[1] || '').trim() && (row[topicIdx] || '').trim();
+            const shelf = col(row, 'shelf').toUpperCase();
+            return shelf && VALID_SHELVES.includes(shelf) && col(row, 'system') && col(row, 'topic');
         })
-        .map(row => {
-            if (hasCategory) {
-                // Columns: Shelf, System, Category, Topic, ErrorType, Notes, Strategy
-                return {
-                    shelf: (row[0] || '').trim().toUpperCase(),
-                    system: normalizeSystem((row[1] || '').trim()),
-                    category: (row[2] || '').trim(),
-                    topic: (row[3] || '').trim(),
-                    errorType: normalizeErrorType((row[4] || '').trim()),
-                    notes: (row[5] || '').trim(),
-                    strategy: (row[6] || '').trim(),
-                    source,
-                };
-            } else {
-                // Columns: Shelf, System, Topic, ErrorType, Notes, Strategy
-                return {
-                    shelf: (row[0] || '').trim().toUpperCase(),
-                    system: normalizeSystem((row[1] || '').trim()),
-                    category: '',
-                    topic: (row[2] || '').trim(),
-                    errorType: normalizeErrorType((row[3] || '').trim()),
-                    notes: (row[4] || '').trim(),
-                    strategy: (row[5] || '').trim(),
-                    source,
-                };
-            }
-        });
+        .map(row => ({
+            shelf: col(row, 'shelf').toUpperCase(),
+            system: normalizeSystem(col(row, 'system')),
+            category: col(row, 'category'),
+            topic: col(row, 'topic'),
+            errorType: normalizeErrorType(col(row, 'errorType')),
+            notes: col(row, 'notes'),
+            strategy: col(row, 'strategy'),
+            source,
+        }));
 }
 
 function parseTracker(csv) {

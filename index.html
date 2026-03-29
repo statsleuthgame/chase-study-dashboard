@@ -466,6 +466,8 @@
                                 <option value="OB">OB - Obstetrics</option>
                                 <option value="AMB">AMB - Ambulatory</option>
                                 <option value="SURG">SURG - Surgery</option>
+                                <option value="SRG">SRG - Surgery</option>
+                                <option value="NEU">NEU - Neurology</option>
                                 <option value="PSYCH">PSYCH - Psychiatry</option>
                             </select>
                         </div>
@@ -473,22 +475,26 @@
                             <label for="form-system">System *</label>
                             <select id="form-system" required>
                                 <option value="">Select System</option>
-                                <option value="Nervous system">Nervous System</option>
-                                <option value="Pulmonary and critical care">Pulmonary & Critical Care</option>
-                                <option value="Gastrointestinal and Nutrition">GI & Nutrition</option>
-                                <option value="Renal, Urinary systems and electrolytes">Renal & Electrolytes</option>
-                                <option value="Endocrine, Diabetes and metabolism">Endocrine & Metabolism</option>
-                                <option value="Cardiovascular System">Cardiovascular</option>
-                                <option value="Hematology and Oncology">Hematology & Oncology</option>
-                                <option value="Infectious diseases">Infectious Diseases</option>
-                                <option value="Rheumatology / Orthopedics and Sports">Rheumatology & Ortho</option>
-                                <option value="Allergy and Immunology">Allergy & Immunology</option>
+                                <option value="Nervous System">Nervous System</option>
+                                <option value="Pulmonary & Critical Care">Pulmonary & Critical Care</option>
+                                <option value="Gastrointestinal & Nutrition">GI & Nutrition</option>
+                                <option value="Renal & Electrolytes">Renal & Electrolytes</option>
+                                <option value="Endocrine, Diabetes & Metabolism">Endocrine & Metabolism</option>
+                                <option value="Cardiovascular">Cardiovascular</option>
+                                <option value="Hematology & Oncology">Hematology & Oncology</option>
+                                <option value="Infectious Diseases">Infectious Diseases</option>
+                                <option value="Rheumatology/Orthopedics & Sports">Rheumatology & Ortho</option>
+                                <option value="Allergy & Immunology">Allergy & Immunology</option>
                                 <option value="Dermatology">Dermatology</option>
-                                <option value="Ear, nose, throat (ENT)">ENT</option>
-                                <option value="Male Reproductive System">Male Reproductive</option>
-                                <option value="Social Sciences (Ethics/Legal/Prof)">Social Sciences</option>
-                                <option value="Poisening and environmental exposure">Poisoning & Environmental</option>
-                                <option value="pregnancy, Childbirth & Puerperium">Pregnancy & Childbirth</option>
+                                <option value="ENT">ENT</option>
+                                <option value="Male Reproductive">Male Reproductive</option>
+                                <option value="Female Reproductive">Female Reproductive</option>
+                                <option value="Social Sciences">Social Sciences</option>
+                                <option value="Poisoning & Environmental">Poisoning & Environmental</option>
+                                <option value="Pregnancy & Childbirth">Pregnancy & Childbirth</option>
+                                <option value="Psychiatric/Behavioral & Substance Use">Psych/Behavioral</option>
+                                <option value="Biostatistics & Epidemiology">Biostats & Epi</option>
+                                <option value="Ophthalmology">Ophthalmology</option>
                                 <option value="Miscellaneous">Miscellaneous</option>
                             </select>
                         </div>
@@ -504,14 +510,13 @@
                             <label for="form-error">Why I Missed It *</label>
                             <select id="form-error" required>
                                 <option value="">Select Error Type</option>
-                                <option value="Knowledge gap">Knowledge Gap</option>
+                                <option value="Knowledge Gap">Knowledge Gap</option>
+                                <option value="Didn't Recognize Presentation">Didn't Recognize Presentation</option>
+                                <option value="Mixed Up Dx">Mixed Up Dx</option>
                                 <option value="Anchoring Bias">Anchoring Bias</option>
-                                <option value="Premature conclusion">Premature Conclusion</option>
-                                <option value="Hidden Hook Failure">Hidden Hook Failure</option>
-                                <option value="Right map / wrong order">Right Map / Wrong Order</option>
-                                <option value="Wrong Algorithm">Wrong Algorithm</option>
-                                <option value="Dumb mistake">Dumb Mistake</option>
-                                <option value="Misunderstood vinnet">Misunderstood Vignette</option>
+                                <option value="Forgot Anki Card">Forgot Anki Card</option>
+                                <option value="Dumb Mistake">Dumb Mistake</option>
+                                <option value="Premature Conclusion">Premature Conclusion</option>
                             </select>
                         </div>
                     </div>
@@ -570,6 +575,6 @@
         </section>
     </main>
 
-    <script src="js/app.js?v=5"></script>
+    <script src="js/app.js?v=6"></script>
 </body>
 </html>
