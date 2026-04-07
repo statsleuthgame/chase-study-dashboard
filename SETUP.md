@@ -9,6 +9,16 @@
 
 This lets the dashboard read data without authentication.
 
+### Find your Sheet ID
+
+Your Sheet ID is the long string in the Google Sheets URL:
+
+```
+https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID_HERE/edit
+```
+
+When you first load the dashboard, it will prompt you to enter this ID. It is stored in your browser's localStorage so you only need to enter it once. You can update it later via the **Settings** button in the sidebar.
+
 ## 2. Deploy Google Apps Script (for adding entries from the dashboard)
 
 This creates a free web endpoint that lets the dashboard write new rows to your sheet.

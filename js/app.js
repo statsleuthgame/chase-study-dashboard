@@ -2,10 +2,37 @@
 // Step 2 CK Study Dashboard - Main Application (v2)
 // ============================================================
 
-const SHEET_ID = 'REDACTED_SHEET_ID';
+let SHEET_ID = localStorage.getItem('sheetId') || '';
 const sheetUrl = (name) => `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(name)}`;
 
 let APPS_SCRIPT_URL = localStorage.getItem('appsScriptUrl') || '';
+
+function ensureSheetId() {
+    if (!SHEET_ID) {
+        const id = prompt('Enter your Google Sheet ID.\n\nYou can find it in your Google Sheet URL:\nhttps://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit\n\nSee SETUP.md for details.');
+        if (id && id.trim()) {
+            SHEET_ID = id.trim();
+            localStorage.setItem('sheetId', SHEET_ID);
+            return true;
+        }
+        return false;
+    }
+    return true;
+}
+
+function reconfigureSettings() {
+    const newSheetId = prompt('Google Sheet ID:', SHEET_ID);
+    if (newSheetId !== null && newSheetId.trim()) {
+        SHEET_ID = newSheetId.trim();
+        localStorage.setItem('sheetId', SHEET_ID);
+    }
+    const newUrl = prompt('Google Apps Script URL (leave empty to skip):', APPS_SCRIPT_URL);
+    if (newUrl !== null) {
+        APPS_SCRIPT_URL = newUrl.trim();
+        localStorage.setItem('appsScriptUrl', APPS_SCRIPT_URL);
+    }
+    location.reload();
+}
 
 const COLORS = {
     blue: '#3b82f6', red: '#ef4444', yellow: '#f59e0b', green: '#22c55e',
@@ -2244,6 +2271,11 @@ function renderAll() {
 }
 
 (async function init() {
+    if (!ensureSheetId()) {
+        hideLoading();
+        document.querySelector('.content').innerHTML = '<div style="padding:60px;text-align:center;color:var(--text-muted);"><h2>No Google Sheet ID configured</h2><p>Reload the page and enter your Sheet ID when prompted, or click the Settings button in the sidebar.</p></div>';
+        return;
+    }
     await fetchData();
     if (rawData.length > 0) renderAll();
     hideLoading();
