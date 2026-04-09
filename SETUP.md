@@ -9,86 +9,46 @@
 
 This lets the dashboard read data without authentication.
 
-### Find your Sheet ID
+## 2. Deploy Google Apps Script (form submissions + daily email briefing)
 
-Your Sheet ID is the long string in the Google Sheets URL:
-
-```
-https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID_HERE/edit
-```
-
-When you first load the dashboard, it will prompt you to enter this ID. It is stored in your browser's localStorage so you only need to enter it once. You can update it later via the **Settings** button in the sidebar.
-
-## 2. Deploy Google Apps Script (for adding entries from the dashboard)
-
-This creates a free web endpoint that lets the dashboard write new rows to your sheet.
+This creates a free web endpoint that lets the dashboard write new rows to your sheet **and** sends a daily email briefing to Chase at 7 AM.
 
 ### Step-by-step:
 
 1. Open your Google Sheet
 2. Go to **Extensions → Apps Script**
-3. Delete any existing code and paste this:
-
-```javascript
-function doPost(e) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var data = JSON.parse(e.postData.contents);
-
-  if (data.type === 'im-tracker') {
-    // Write to the IM Tracker sheet
-    var trackerSheet = ss.getSheetByName('IM Tracker');
-    if (!trackerSheet) {
-      return ContentService
-        .createTextOutput(JSON.stringify({ status: 'error', message: 'IM Tracker sheet not found' }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-    trackerSheet.appendRow([
-      data.date,
-      data.qCompleted,
-      data.pctCorrect,
-      data.qRemaining
-    ]);
-  } else {
-    // Write to the first sheet (Lessons Learned Journal)
-    var sheet = ss.getSheets()[0];
-    sheet.appendRow([
-      data.shelf,
-      data.system,
-      data.category,
-      data.topic,
-      data.errorType,
-      data.notes,
-      data.strategy
-    ]);
-  }
-
-  return ContentService
-    .createTextOutput(JSON.stringify({ status: 'success' }))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function doGet(e) {
-  return ContentService
-    .createTextOutput(JSON.stringify({ status: 'ok' }))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-```
-
-> **IMPORTANT:** If you already deployed a previous version, you need to create a **New deployment** (not update the old one) for the changes to take effect. Copy the new URL and paste it when prompted by the dashboard.
-
+3. Delete any existing code and paste the entire contents of `apps-script.js` from this repo
 4. Click **Deploy → New deployment**
 5. Click the gear icon → select **Web app**
 6. Set:
-   - **Description**: "Study Dashboard API"
+   - **Description**: "Study Dashboard API v2"
    - **Execute as**: Me
    - **Who has access**: Anyone
 7. Click **Deploy**
 8. **Authorize** when prompted (click through the "unsafe" warning - it's your own script)
 9. Copy the **Web app URL** - it looks like: `https://script.google.com/macros/s/XXXXX/exec`
 
+> **IMPORTANT:** If you already deployed a previous version, you need to create a **New deployment** (not update the old one) for the changes to take effect. Copy the new URL and paste it when prompted by the dashboard.
+
+### Set up the daily email:
+
+1. In the Apps Script editor, select `createDailyTrigger` from the function dropdown (top bar)
+2. Click **Run**
+3. Authorize Gmail permissions when prompted
+4. Done — Chase will receive a daily briefing email at ~7 AM
+
+To test immediately: select `testSendBriefing` from the dropdown and click **Run**.
+
 ### Connect it to the dashboard:
 
-When you first click "Add Entry" on the dashboard, it will prompt you to paste this URL. It saves it in your browser so you only need to do this once.
+When you first click "Add Entry" on the dashboard, it will prompt you to paste the Web app URL. It saves it in your browser so you only need to do this once.
+
+### What the daily email includes:
+
+- **Yesterday's QBank progress** — questions done, scores, vs. running average
+- **Missed questions logged** — full detail with error type breakdown, notes, and strategies
+- **Coaching points** — targeted suggestions based on yesterday's error patterns
+- **Big-picture insights** — Pareto analysis, error profile, repeat offender topics, score trends
 
 ## 3. Host on GitHub Pages
 
