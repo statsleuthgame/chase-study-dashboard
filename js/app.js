@@ -335,6 +335,7 @@ const SECTION_NAMES = {
     'repeat-topics': 'Topic Depth Reports',
     'trends': 'Trends & Insights',
     'entries': 'All Entries',
+    'exam-review': 'Pre-Exam Review',
     'add-entry': 'Add New Entry',
 };
 
@@ -400,6 +401,7 @@ function renderSection(sectionId) {
         case 'repeat-topics': renderRepeatTopics(); break;
         case 'trends': renderTrends(); break;
         case 'entries': populateFilters(); renderEntries(); break;
+        case 'exam-review': populateReviewFilters(); renderExamReview(); break;
         case 'add-entry': break; // static form, nothing to render
     }
     // Generate data-driven conclusion for this section
@@ -1896,6 +1898,137 @@ document.getElementById('filter-shelf').addEventListener('change', applyFilters)
 document.getElementById('filter-system').addEventListener('change', applyFilters);
 document.getElementById('filter-error').addEventListener('change', applyFilters);
 document.getElementById('filter-search').addEventListener('input', applyFilters);
+
+// ============================================================
+// 9b. PRE-EXAM REVIEW (System -> Topic grouped view)
+// ============================================================
+
+function escReview(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function populateReviewFilters() {
+    const shelfSel = document.getElementById('review-shelf-filter');
+    if (!shelfSel || shelfSel.options.length > 1) return;
+    const shelves = [...new Set(rawData.map(d => d.shelf))].sort();
+    shelves.forEach(s => {
+        shelfSel.insertAdjacentHTML('beforeend', `<option value="${escReview(s)}">${escReview(s)}</option>`);
+    });
+}
+
+function getFilteredReviewData() {
+    const shelf = document.getElementById('review-shelf-filter').value;
+    const source = document.getElementById('review-source-filter').value;
+    const search = (document.getElementById('review-search').value || '').toLowerCase();
+    return rawData.filter(d => {
+        if (shelf && d.shelf !== shelf) return false;
+        if (source && d.source !== source) return false;
+        if (search) {
+            const hay = `${d.topic} ${d.notes} ${d.strategy} ${d.category} ${d.system}`.toLowerCase();
+            if (!hay.includes(search)) return false;
+        }
+        return true;
+    });
+}
+
+function groupBySystemTopic(entries) {
+    const systems = new Map();
+    entries.forEach(d => {
+        if (!systems.has(d.system)) systems.set(d.system, new Map());
+        const topics = systems.get(d.system);
+        if (!topics.has(d.topic)) topics.set(d.topic, { category: d.category, entries: [] });
+        topics.get(d.topic).entries.push(d);
+    });
+    return systems;
+}
+
+function sumTopicEntries(topicMap) {
+    let n = 0;
+    topicMap.forEach(v => { n += v.entries.length; });
+    return n;
+}
+
+function renderReviewEntry(e) {
+    const errClass = getErrorBadgeClass(e.errorType);
+    const sourceClass = (e.source || '').toLowerCase();
+    return `
+        <li class="review-entry">
+            <div class="review-entry-meta">
+                <span class="shelf-tag">${escReview(e.shelf)}</span>
+                <span class="source-tag source-${escReview(sourceClass)}">${escReview(e.source)}</span>
+                ${e.errorType ? `<span class="error-badge ${errClass}">${escReview(e.errorType)}</span>` : ''}
+            </div>
+            ${e.notes ? `<div class="review-entry-section"><strong>Why I missed it:</strong> ${escReview(e.notes)}</div>` : ''}
+            ${e.strategy ? `<div class="review-entry-section"><strong>Strategy:</strong> ${escReview(e.strategy)}</div>` : ''}
+        </li>`;
+}
+
+function renderReviewTopic(topic, data) {
+    const { category, entries } = data;
+    return `
+        <div class="review-topic">
+            <div class="review-topic-header">
+                <h4 class="review-topic-name">${escReview(topic)}</h4>
+                ${category ? `<span class="review-topic-category">${escReview(category)}</span>` : ''}
+                <span class="review-topic-count">${entries.length}×</span>
+            </div>
+            <ul class="review-entries">
+                ${entries.map(renderReviewEntry).join('')}
+            </ul>
+        </div>`;
+}
+
+function renderExamReview() {
+    const body = document.getElementById('review-body');
+    if (!body) return;
+    const data = getFilteredReviewData();
+    const systemsSet = new Set(data.map(d => d.system));
+    const countEl = document.getElementById('review-count');
+    if (countEl) {
+        countEl.textContent = data.length
+            ? `${data.length} ${data.length === 1 ? 'entry' : 'entries'} across ${systemsSet.size} ${systemsSet.size === 1 ? 'system' : 'systems'}`
+            : '';
+    }
+
+    if (!data.length) {
+        body.innerHTML = '<p class="empty-state">No entries match these filters.</p>';
+        return;
+    }
+
+    const grouped = groupBySystemTopic(data);
+    const sortedSystems = [...grouped.entries()].sort((a, b) => sumTopicEntries(b[1]) - sumTopicEntries(a[1]));
+
+    body.innerHTML = sortedSystems.map(([system, topics]) => {
+        const total = sumTopicEntries(topics);
+        const sortedTopics = [...topics.entries()].sort((a, b) => b[1].entries.length - a[1].entries.length);
+        return `
+            <details class="review-system" open>
+                <summary>
+                    <span class="review-system-name">${escReview(system)}</span>
+                    <span class="review-system-count">${total} ${total === 1 ? 'miss' : 'misses'}</span>
+                </summary>
+                <div class="review-topics">
+                    ${sortedTopics.map(([topic, d]) => renderReviewTopic(topic, d)).join('')}
+                </div>
+            </details>`;
+    }).join('');
+}
+
+document.getElementById('review-shelf-filter').addEventListener('change', renderExamReview);
+document.getElementById('review-source-filter').addEventListener('change', renderExamReview);
+document.getElementById('review-search').addEventListener('input', renderExamReview);
+document.getElementById('review-expand-all').addEventListener('click', () => {
+    document.querySelectorAll('#review-body details.review-system').forEach(d => { d.open = true; });
+});
+document.getElementById('review-collapse-all').addEventListener('click', () => {
+    document.querySelectorAll('#review-body details.review-system').forEach(d => { d.open = false; });
+});
+document.getElementById('review-print-btn').addEventListener('click', () => {
+    document.querySelectorAll('#review-body details.review-system').forEach(d => { d.open = true; });
+    window.print();
+});
 
 // ============================================================
 // 10. ADD ENTRY FORMS

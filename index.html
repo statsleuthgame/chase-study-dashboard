@@ -37,6 +37,7 @@
             <li><a href="#" class="nav-link" data-section="systems">Systems Breakdown</a></li>
             <li><a href="#" class="nav-link" data-section="shelves">Shelf Performance</a></li>
             <li><a href="#" class="nav-link" data-section="repeat-topics">Topic Depth Reports</a></li>
+            <li><a href="#" class="nav-link" data-section="exam-review">Pre-Exam Review</a></li>
             <li><a href="#" class="nav-link" data-section="trends">Trends & Insights</a></li>
             <li><a href="#" class="nav-link" data-section="entries">All Entries</a></li>
             <li><a href="#" class="nav-link" data-section="add-entry">+ Add Entry</a></li>
@@ -432,6 +433,41 @@
                 </table>
             </div>
             <p class="entry-count">Showing <span id="showing-count">0</span> of <span id="total-count">0</span> entries</p>
+        </section>
+
+        <!-- PRE-EXAM REVIEW -->
+        <section id="exam-review" class="section">
+            <h2>Pre-Exam Review</h2>
+            <p class="section-subtitle">Rapid-fire review of every logged miss, grouped by System → Topic. Use before a shelf exam to lock specific mistakes into short-term memory.</p>
+
+            <div class="review-toolbar">
+                <label class="review-filter">
+                    <span>Shelf</span>
+                    <select id="review-shelf-filter">
+                        <option value="">All Shelves</option>
+                    </select>
+                </label>
+                <label class="review-filter">
+                    <span>Source</span>
+                    <select id="review-source-filter">
+                        <option value="">UW + Amboss</option>
+                        <option value="UW">UW only</option>
+                        <option value="Amb">Amboss only</option>
+                    </select>
+                </label>
+                <label class="review-filter">
+                    <span>Search</span>
+                    <input type="text" id="review-search" placeholder="Topic, notes, strategy...">
+                </label>
+                <span class="review-count" id="review-count"></span>
+                <div class="review-toolbar-actions">
+                    <button id="review-expand-all" class="btn btn-secondary">Expand all</button>
+                    <button id="review-collapse-all" class="btn btn-secondary">Collapse all</button>
+                    <button id="review-print-btn" class="btn">Print / Save PDF</button>
+                </div>
+            </div>
+
+            <div id="review-body"></div>
         </section>
 
         <!-- ADD ENTRY -->
