@@ -134,9 +134,10 @@
             <div class="section-conclusion" id="conclusion-im-tracker"></div>
 
             <div class="qbank-tabs">
-                <button class="qbank-tab active" data-qbank="uw">UWorld</button>
+                <button class="qbank-tab active" data-qbank="uw">UW (IM)</button>
+                <button class="qbank-tab" data-qbank="srg">SRG</button>
                 <button class="qbank-tab" data-qbank="amb">Amboss</button>
-                <button class="qbank-tab qbank-tab-compare" data-qbank="compare">UW vs Amb</button>
+                <button class="qbank-tab qbank-tab-compare" data-qbank="compare">Compare All</button>
             </div>
 
             <!-- UWorld Panel -->
@@ -154,6 +155,23 @@
                 <div class="chart-row"><div class="chart-container full-width"><h3>Questions Per Day</h3><canvas id="uw-qperday-chart"></canvas></div></div>
                 <div class="chart-row"><div class="chart-container full-width"><h3>Cumulative Progress vs Questions Remaining</h3><canvas id="uw-cumulative-chart"></canvas></div></div>
                 <div class="chart-row"><div class="chart-container full-width"><h3>Does Volume Affect Score?</h3><canvas id="uw-scatter-chart"></canvas></div></div>
+            </div>
+
+            <!-- SRG Panel (UW Tracker rows where Shelf == 'SRG') -->
+            <div id="qbank-srg" class="qbank-panel">
+                <div class="stats-grid">
+                    <div class="stat-card"><span class="stat-number" id="srg-total-q">--</span><span class="stat-label">Total Questions Done</span></div>
+                    <div class="stat-card"><span class="stat-number" id="srg-avg-score">--</span><span class="stat-label">Overall Avg Score</span></div>
+                    <div class="stat-card"><span class="stat-number" id="srg-avg-qday">--</span><span class="stat-label">Avg Questions/Day</span></div>
+                    <div class="stat-card"><span class="stat-number" id="srg-best-day">--</span><span class="stat-label">Best Day (Questions)</span></div>
+                    <div class="stat-card"><span class="stat-number" id="srg-remaining">--</span><span class="stat-label">Questions Remaining</span></div>
+                    <div class="stat-card"><span class="stat-number" id="srg-recent-avg">--</span><span class="stat-label">Last 7 Days Avg</span></div>
+                    <div class="stat-card"><span class="stat-number" id="srg-trend-dir">--</span><span class="stat-label">Score Trend</span><span class="stat-hint" id="srg-early-avg"></span></div>
+                </div>
+                <div class="chart-row"><div class="chart-container full-width"><h3>Score Over Time (% Correct per 40 Questions)</h3><canvas id="srg-score-chart"></canvas></div></div>
+                <div class="chart-row"><div class="chart-container full-width"><h3>Questions Per Day</h3><canvas id="srg-qperday-chart"></canvas></div></div>
+                <div class="chart-row"><div class="chart-container full-width"><h3>Cumulative Progress vs Questions Remaining</h3><canvas id="srg-cumulative-chart"></canvas></div></div>
+                <div class="chart-row"><div class="chart-container full-width"><h3>Does Volume Affect Score?</h3><canvas id="srg-scatter-chart"></canvas></div></div>
             </div>
 
             <!-- Amboss Panel -->
@@ -585,6 +603,21 @@
                             </select>
                         </div>
                         <div class="form-group">
+                            <label for="tracker-shelf">Shelf</label>
+                            <select id="tracker-shelf">
+                                <option value="SRG" selected>SRG - Surgery</option>
+                                <option value="IM">IM - Internal Medicine</option>
+                                <option value="FM">FM - Family Medicine</option>
+                                <option value="EM">EM - Emergency Medicine</option>
+                                <option value="PED">PED - Pediatrics</option>
+                                <option value="OB">OB - Obstetrics</option>
+                                <option value="AMB">AMB - Ambulatory</option>
+                                <option value="NEU">NEU - Neurology</option>
+                                <option value="PSYCH">PSYCH - Psychiatry</option>
+                                <option value="">— None / Mixed</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
                             <label for="tracker-date">Date *</label>
                             <input type="date" id="tracker-date" required>
                         </div>
@@ -611,6 +644,6 @@
         </section>
     </main>
 
-    <script src="js/app.js?v=7"></script>
+    <script src="js/app.js?v=8"></script>
 </body>
 </html>

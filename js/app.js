@@ -137,25 +137,58 @@ function parseLLJ(csv, source) {
 
 function parseTracker(csv) {
     const rows = parseCSV(csv);
-    const header = (rows[0] || []).join(' ').toLowerCase();
-    if (!header.includes('date') && !header.includes('completed')) return [];
+    if (!rows.length) return [];
+    const headerRow = rows[0] || [];
+    const headerJoined = headerRow.join(' ').toLowerCase();
+    if (!headerJoined.includes('date') && !headerJoined.includes('completed')) return [];
+
+    // Header-based column mapping so columns can be reordered or include extras like Shelf
+    const colMap = {};
+    headerRow.forEach((h, i) => {
+        const lc = (h || '').toLowerCase().trim();
+        if (!lc) return;
+        if (lc === 'date' || lc.startsWith('date')) { if (colMap.date === undefined) colMap.date = i; }
+        else if (lc.includes('completed') || lc === 'q' || lc === 'questions') { if (colMap.qCompleted === undefined) colMap.qCompleted = i; }
+        else if (lc.includes('correct') || lc.includes('%')) { if (colMap.pctCorrect === undefined) colMap.pctCorrect = i; }
+        else if (lc.includes('remaining')) { if (colMap.qRemaining === undefined) colMap.qRemaining = i; }
+        else if (lc === 'shelf') { colMap.shelf = i; }
+    });
+    // Fallback to positional columns if any required header missing
+    if (colMap.date === undefined) colMap.date = 0;
+    if (colMap.qCompleted === undefined) colMap.qCompleted = 1;
+    if (colMap.pctCorrect === undefined) colMap.pctCorrect = 2;
+    if (colMap.qRemaining === undefined) colMap.qRemaining = 3;
+
+    const col = (row, key) => (row[colMap[key]] || '').trim();
+
     return rows.slice(1)
         .filter(row => {
-            const dateVal = (row[0] || '').trim();
-            const qVal = (row[1] || '').trim();
+            const dateVal = col(row, 'date');
+            const qVal = col(row, 'qCompleted');
             return dateVal && /\d/.test(dateVal) && qVal && /^\d+$/.test(qVal);
         })
         .map(row => {
-            const pctStr = (row[2] || '').replace(/%/g, '').replace(/[—–-]/g, '').trim();
+            const pctStr = col(row, 'pctCorrect').replace(/%/g, '').replace(/[—–-]/g, '').trim();
             const pct = pctStr && !isNaN(parseFloat(pctStr)) ? parseFloat(pctStr) : null;
             return {
-                date: (row[0] || '').trim(),
-                qCompleted: parseInt(row[1]) || 0,
+                date: col(row, 'date'),
+                qCompleted: parseInt(col(row, 'qCompleted')) || 0,
                 pctCorrect: pct,
-                qRemaining: parseInt(row[3]) || 0,
+                qRemaining: parseInt(col(row, 'qRemaining')) || 0,
+                shelf: colMap.shelf !== undefined ? col(row, 'shelf').toUpperCase() : '',
             };
         })
         .filter(r => r.qCompleted > 0);
+}
+
+// Slice UW Tracker by Shelf so SRG study can be tracked separately from IM history.
+// SRG = rows tagged 'SRG' in the Shelf column. IM = everything else (legacy rows
+// with no shelf are treated as IM since the historical data was IM-only).
+function getUwImTrackerData() {
+    return uwTrackerData.filter(d => d.shelf !== 'SRG');
+}
+function getSrgTrackerData() {
+    return uwTrackerData.filter(d => d.shelf === 'SRG');
 }
 
 async function fetchSheetCSV(name) {
@@ -499,9 +532,16 @@ function renderStudyToday() {
 
 function renderIMTracker() {
     // Destroy previous tracker charts so they re-render fresh
-    ['uwScore', 'uwQPerDay', 'uwCumulative', 'uwScatter', 'ambScore', 'ambQPerDay', 'ambCumulative', 'ambScatter', 'compareScore', 'compareError'].forEach(destroyChart);
+    ['uwScore', 'uwQPerDay', 'uwCumulative', 'uwScatter',
+     'srgScore', 'srgQPerDay', 'srgCumulative', 'srgScatter',
+     'ambScore', 'ambQPerDay', 'ambCumulative', 'ambScatter',
+     'compareScore', 'compareError'].forEach(destroyChart);
 
-    // Set up sub-tab switching
+    // Set up sub-tab switching (idempotent — clones the node to drop any prior listeners)
+    document.querySelectorAll('.qbank-tab').forEach(tab => {
+        const fresh = tab.cloneNode(true);
+        tab.parentNode.replaceChild(fresh, tab);
+    });
     document.querySelectorAll('.qbank-tab').forEach(tab => {
         tab.addEventListener('click', () => {
             document.querySelectorAll('.qbank-tab').forEach(t => t.classList.remove('active'));
@@ -509,14 +549,29 @@ function renderIMTracker() {
             tab.classList.add('active');
             document.getElementById('qbank-' + tab.dataset.qbank).classList.add('active');
             // Render the sub-panel charts on first view
-            if (tab.dataset.qbank === 'uw' && !charts.uwScore) renderTrackerPanel(uwTrackerData, 'uw', COLORS.blue);
+            if (tab.dataset.qbank === 'uw' && !charts.uwScore) renderTrackerPanel(getUwImTrackerData(), 'uw', COLORS.blue);
+            if (tab.dataset.qbank === 'srg' && !charts.srgScore) renderTrackerPanel(getSrgTrackerData(), 'srg', COLORS.orange);
             if (tab.dataset.qbank === 'amb' && !charts.ambScore) renderTrackerPanel(ambTrackerData, 'amb', COLORS.teal);
             if (tab.dataset.qbank === 'compare' && !charts.compareScore) renderComparison();
         });
     });
 
-    // Render UW by default
-    renderTrackerPanel(uwTrackerData, 'uw', COLORS.blue);
+    // Render the active panel by default (SRG if it exists since that's the active study block, else UW IM)
+    const srgData = getSrgTrackerData();
+    if (srgData.length > 0) {
+        // Default to SRG since it's the active block
+        document.querySelectorAll('.qbank-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.qbank-panel').forEach(p => p.classList.remove('active'));
+        const srgTab = document.querySelector('.qbank-tab[data-qbank="srg"]');
+        const srgPanel = document.getElementById('qbank-srg');
+        if (srgTab && srgPanel) {
+            srgTab.classList.add('active');
+            srgPanel.classList.add('active');
+        }
+        renderTrackerPanel(srgData, 'srg', COLORS.orange);
+    } else {
+        renderTrackerPanel(getUwImTrackerData(), 'uw', COLORS.blue);
+    }
 }
 
 function bucketByQuestions(data, bucketSize) {
@@ -675,132 +730,162 @@ function renderTrackerPanel(data, prefix, color) {
 
 function renderComparison() {
     const container = document.getElementById('compare-content');
-    const uwValid = uwTrackerData.map(d => d.pctCorrect).filter(v => v !== null);
+
+    // Three tracker slices: UW IM (frozen), Amb (paused), SRG (active)
+    const uwImTracker = getUwImTrackerData();
+    const srgTracker = getSrgTrackerData();
+
+    const uwValid = uwImTracker.map(d => d.pctCorrect).filter(v => v !== null);
     const ambValid = ambTrackerData.map(d => d.pctCorrect).filter(v => v !== null);
+    const srgValid = srgTracker.map(d => d.pctCorrect).filter(v => v !== null);
+
     const uwAvg = uwValid.length ? (uwValid.reduce((a, b) => a + b, 0) / uwValid.length) : 0;
     const ambAvg = ambValid.length ? (ambValid.reduce((a, b) => a + b, 0) / ambValid.length) : 0;
-    const uwTotal = uwTrackerData.reduce((s, d) => s + d.qCompleted, 0);
+    const srgAvg = srgValid.length ? (srgValid.reduce((a, b) => a + b, 0) / srgValid.length) : 0;
+
+    const uwTotal = uwImTracker.reduce((s, d) => s + d.qCompleted, 0);
     const ambTotal = ambTrackerData.reduce((s, d) => s + d.qCompleted, 0);
-    const diff = ambAvg - uwAvg;
-    const improved = diff > 0;
+    const srgTotal = srgTracker.reduce((s, d) => s + d.qCompleted, 0);
 
-    // Weak area comparison: find systems with errors in both UW and Amb LLJ
-    const uwLljData = rawData.filter(d => d.source === 'UW');
-    const ambLljData = rawData.filter(d => d.source === 'Amb');
-    const uwSystems = countBy(uwLljData, 'system');
-    const ambSystems = countBy(ambLljData, 'system');
+    // Build a hero card per source so the section gracefully degrades when one source has no data
+    const heroCards = [
+        { key: 'uw',  label: 'UW (IM) Average',  avg: uwAvg,  total: uwTotal,  days: uwImTracker.length, color: COLORS.blue,   hasData: uwValid.length > 0 },
+        { key: 'srg', label: 'SRG Average',      avg: srgAvg, total: srgTotal, days: srgTracker.length,   color: COLORS.orange, hasData: srgValid.length > 0 },
+        { key: 'amb', label: 'Amboss Average',   avg: ambAvg, total: ambTotal, days: ambTrackerData.length, color: COLORS.teal,  hasData: ambValid.length > 0 },
+    ];
 
-    // Get UW weak systems (sorted by misses) and compare to Amb
-    const weakAreaComparison = sortedEntries(uwSystems).map(([sys, uwCount]) => {
+    // LLJ slices for the weak-area / error-type tables.
+    // Note: SRG entries already live inside UW LLJ tagged shelf == 'SRG', so we
+    // split the UW source into "UW non-SRG" + "SRG" to get a true 3-way LLJ view
+    // without needing a separate SRG LLJ sheet.
+    const uwLljNonSrg = rawData.filter(d => d.source === 'UW' && d.shelf !== 'SRG');
+    const srgLlj     = rawData.filter(d => d.source === 'UW' && d.shelf === 'SRG');
+    const ambLlj     = rawData.filter(d => d.source === 'Amb');
+
+    const uwSystems  = countBy(uwLljNonSrg, 'system');
+    const srgSystems = countBy(srgLlj, 'system');
+    const ambSystems = countBy(ambLlj, 'system');
+
+    // Union of system names that appear in any of the three sets, ordered by total misses
+    const systemUnion = new Set([...Object.keys(uwSystems), ...Object.keys(srgSystems), ...Object.keys(ambSystems)]);
+    const weakAreaComparison = [...systemUnion].map(sys => {
+        const uwCount  = uwSystems[sys]  || 0;
+        const srgCount = srgSystems[sys] || 0;
         const ambCount = ambSystems[sys] || 0;
-        const uwRate = uwLljData.length > 0 ? ((uwCount / uwLljData.length) * 100).toFixed(1) : 0;
-        const ambRate = ambLljData.length > 0 ? ((ambCount / ambLljData.length) * 100).toFixed(1) : 0;
-        return { system: sys, uwCount, ambCount, uwRate: parseFloat(uwRate), ambRate: parseFloat(ambRate), change: parseFloat(ambRate) - parseFloat(uwRate) };
-    }).filter(s => s.uwCount >= 2); // only show systems with meaningful UW data
+        const uwRate   = uwLljNonSrg.length > 0 ? ((uwCount  / uwLljNonSrg.length) * 100) : 0;
+        const srgRate  = srgLlj.length     > 0 ? ((srgCount / srgLlj.length)     * 100) : 0;
+        const ambRate  = ambLlj.length     > 0 ? ((ambCount / ambLlj.length)     * 100) : 0;
+        return { system: sys, uwCount, srgCount, ambCount, uwRate, srgRate, ambRate, total: uwCount + srgCount + ambCount };
+    }).filter(s => s.total >= 2)
+      .sort((a, b) => b.total - a.total);
 
-    // Error type comparison
-    const uwErrors = countBy(uwLljData, 'errorType');
-    const ambErrors = countBy(ambLljData, 'errorType');
-    const errorComparison = sortedEntries(uwErrors).map(([err, uwCount]) => {
-        const ambCount = ambErrors[err] || 0;
-        const uwPct = uwLljData.length > 0 ? ((uwCount / uwLljData.length) * 100).toFixed(1) : 0;
-        const ambPct = ambLljData.length > 0 ? ((ambCount / ambLljData.length) * 100).toFixed(1) : 0;
-        return { error: err, uwCount, ambCount, uwPct: parseFloat(uwPct), ambPct: parseFloat(ambPct) };
-    });
+    // Error type comparison across all three slices
+    const uwErrors  = countBy(uwLljNonSrg, 'errorType');
+    const srgErrors = countBy(srgLlj, 'errorType');
+    const ambErrors = countBy(ambLlj, 'errorType');
+    const errorUnion = new Set([...Object.keys(uwErrors), ...Object.keys(srgErrors), ...Object.keys(ambErrors)]);
+    const errorComparison = [...errorUnion].map(err => ({
+        error: err,
+        uwPct:  uwLljNonSrg.length > 0 ? (uwErrors[err]  || 0) / uwLljNonSrg.length * 100 : 0,
+        srgPct: srgLlj.length     > 0 ? (srgErrors[err] || 0) / srgLlj.length     * 100 : 0,
+        ambPct: ambLlj.length     > 0 ? (ambErrors[err] || 0) / ambLlj.length     * 100 : 0,
+        total:  (uwErrors[err] || 0) + (srgErrors[err] || 0) + (ambErrors[err] || 0),
+    })).filter(e => e.total > 0)
+      .sort((a, b) => b.total - a.total);
+
+    // Verdict copy: rank the three averages
+    const ranked = heroCards.filter(c => c.hasData).sort((a, b) => b.avg - a.avg);
+    let verdict = '';
+    if (ranked.length === 0) {
+        verdict = 'No tracker data yet. Log some sessions to see comparison stats.';
+    } else if (ranked.length === 1) {
+        verdict = `Only <strong>${ranked[0].label}</strong> has data so far (<strong>${ranked[0].avg.toFixed(1)}%</strong>). Other sources will appear once you log sessions.`;
+    } else {
+        const top = ranked[0], bottom = ranked[ranked.length - 1];
+        const spread = (top.avg - bottom.avg).toFixed(1);
+        verdict = `<strong>${top.label}</strong> leads at <strong>${top.avg.toFixed(1)}%</strong>, with <strong>${bottom.label}</strong> at <strong>${bottom.avg.toFixed(1)}%</strong> — a <strong>${spread}-point spread</strong> across active study blocks.`;
+    }
 
     container.innerHTML = `
         <!-- Overall Comparison Stats -->
         <div class="compare-hero">
-            <div class="compare-hero-card">
-                <div class="compare-hero-label">UWorld Average</div>
-                <div class="compare-hero-value" style="color:${COLORS.blue}">${uwAvg.toFixed(1)}%</div>
-                <div class="compare-hero-sub">${uwTotal} questions over ${uwTrackerData.length} days</div>
-            </div>
-            <div class="compare-hero-arrow ${improved ? 'arrow-up' : 'arrow-down'}">
-                <span class="compare-arrow-text">${improved ? '+' : ''}${diff.toFixed(1)}%</span>
-            </div>
-            <div class="compare-hero-card">
-                <div class="compare-hero-label">Amboss Average</div>
-                <div class="compare-hero-value" style="color:${COLORS.teal}">${ambAvg.toFixed(1)}%</div>
-                <div class="compare-hero-sub">${ambTotal} questions over ${ambTrackerData.length} days</div>
-            </div>
+            ${heroCards.map(c => `
+                <div class="compare-hero-card">
+                    <div class="compare-hero-label">${c.label}</div>
+                    <div class="compare-hero-value" style="color:${c.color}">${c.hasData ? c.avg.toFixed(1) + '%' : '—'}</div>
+                    <div class="compare-hero-sub">${c.hasData ? `${c.total} questions over ${c.days} days` : 'No data yet'}</div>
+                </div>
+            `).join('')}
         </div>
 
-        <div class="compare-verdict ${improved ? 'verdict-improved' : 'verdict-declined'}">
-            ${improved
-                ? `Your Amboss average is <strong>${diff.toFixed(1)} percentage points higher</strong> than UWorld. The UWorld foundation is paying off — you retained material and are performing better on a different qbank.`
-                : diff < -3
-                ? `Your Amboss average is <strong>${Math.abs(diff).toFixed(1)} points lower</strong> than UWorld. This is expected — Amboss questions are subjectively harder per Reddit feedback, and you're seeing new question styles. Focus on the weak area analysis below to close remaining gaps.`
-                : `Your Amboss average is within <strong>${Math.abs(diff).toFixed(1)} points</strong> of UWorld — essentially holding steady. You're maintaining your level on a different (and often harder) question bank.`
-            }
-        </div>
+        <div class="compare-verdict verdict-improved">${verdict}</div>
 
         <!-- Score Rolling Average Overlay -->
         <div class="chart-container full-width" style="margin-bottom:24px;">
-            <h3>Score Trajectory: UWorld vs Amboss (per ${SCORE_BUCKET_SIZE} Questions)</h3>
+            <h3>Score Trajectory: UW (IM) vs SRG vs Amboss (per ${SCORE_BUCKET_SIZE} Questions)</h3>
             <canvas id="compare-score-chart"></canvas>
         </div>
 
-        <!-- Weak Area Comparison -->
-        ${weakAreaComparison.length > 0 && ambLljData.length > 0 ? `
-        <h3 class="subsection-title">Weak Area Progress: Did You Close the Gaps?</h3>
-        <p class="section-subtitle">Comparing the % of errors each system represents — a lower Amb % means you improved in that area</p>
+        <!-- Weak Area Comparison (3-way LLJ split) -->
+        ${weakAreaComparison.length > 0 ? `
+        <h3 class="subsection-title">Weak Area Profile by Study Block</h3>
+        <p class="section-subtitle">% of misses each system represents within UW (IM), SRG, and Amb. Lower % in a later block = you closed the gap.</p>
         <div class="table-wrapper" style="margin-bottom:24px;">
             <table>
                 <thead>
                     <tr>
                         <th>System</th>
-                        <th>UW Misses</th>
-                        <th>UW Error %</th>
+                        <th>UW (IM) Misses</th>
+                        <th>UW (IM) %</th>
+                        <th>SRG Misses</th>
+                        <th>SRG %</th>
                         <th>Amb Misses</th>
-                        <th>Amb Error %</th>
-                        <th>Change</th>
-                        <th>Verdict</th>
+                        <th>Amb %</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${weakAreaComparison.map(s => {
-                        const changeColor = s.change < -2 ? COLORS.green : s.change > 2 ? COLORS.red : COLORS.yellow;
-                        const verdict = s.ambCount === 0 ? 'No Amb data' : s.change < -2 ? 'Improved' : s.change > 2 ? 'Still weak' : 'Stable';
-                        const verdictClass = s.ambCount === 0 ? '' : s.change < -2 ? 'verdict-improved' : s.change > 2 ? 'verdict-declined' : 'verdict-stable';
-                        return `<tr>
+                    ${weakAreaComparison.map(s => `
+                        <tr>
                             <td><strong>${s.system}</strong></td>
                             <td style="text-align:center">${s.uwCount}</td>
-                            <td style="text-align:center">${s.uwRate}%</td>
+                            <td style="text-align:center;color:${s.uwRate >= 10 ? COLORS.red : 'inherit'}">${s.uwRate.toFixed(1)}%</td>
+                            <td style="text-align:center">${s.srgCount}</td>
+                            <td style="text-align:center;color:${s.srgRate >= 10 ? COLORS.red : 'inherit'}">${s.srgRate.toFixed(1)}%</td>
                             <td style="text-align:center">${s.ambCount}</td>
-                            <td style="text-align:center">${s.ambRate}%</td>
-                            <td style="text-align:center;color:${changeColor};font-weight:700">${s.change > 0 ? '+' : ''}${s.change.toFixed(1)}%</td>
-                            <td><span class="compare-verdict-badge ${verdictClass}">${verdict}</span></td>
-                        </tr>`;
-                    }).join('')}
+                            <td style="text-align:center;color:${s.ambRate >= 10 ? COLORS.red : 'inherit'}">${s.ambRate.toFixed(1)}%</td>
+                        </tr>
+                    `).join('')}
                 </tbody>
             </table>
-        </div>` : ambLljData.length === 0 ? '<p style="color:var(--text-muted);padding:20px;">Amb LLJ data will appear here once you start logging missed questions in Amboss.</p>' : ''}
+        </div>` : '<p style="color:var(--text-muted);padding:20px;">Weak area comparison will appear once you have LLJ entries in at least one block.</p>'}
 
         <!-- Error Type Comparison -->
-        ${errorComparison.length > 0 && ambLljData.length > 0 ? `
-        <h3 class="subsection-title">Error Type Evolution</h3>
-        <p class="section-subtitle">How your error pattern changed from UWorld to Amboss</p>
+        ${errorComparison.length > 0 ? `
+        <h3 class="subsection-title">Error Type Evolution Across Blocks</h3>
+        <p class="section-subtitle">How your error pattern shifts from one study block to the next</p>
         <div class="chart-container full-width">
             <canvas id="compare-error-chart"></canvas>
         </div>` : ''}
     `;
 
-    // Render score overlay chart (volume-normalized buckets)
-    if (uwValid.length > 0 || ambValid.length > 0) {
-        const uwBuckets = bucketByQuestions(uwTrackerData, SCORE_BUCKET_SIZE);
-        const ambBuckets = bucketByQuestions(ambTrackerData, SCORE_BUCKET_SIZE);
-        const uwBucketScores = uwBuckets.map(b => b.score);
-        const ambBucketScores = ambBuckets.map(b => b.score);
-        const uwRolling = uwBucketScores.map((_, i) => {
-            const w = uwBucketScores.slice(Math.max(0, i - 4), i + 1).filter(v => v !== null);
-            return w.length > 0 ? (w.reduce((a, b) => a + b, 0) / w.length) : null;
+    // 3-line score overlay (UW IM / SRG / Amb)
+    const sources = [
+        { key: 'uw',  label: 'UW (IM)', data: uwImTracker,    color: COLORS.blue,   valid: uwValid.length },
+        { key: 'srg', label: 'SRG',     data: srgTracker,     color: COLORS.orange, valid: srgValid.length },
+        { key: 'amb', label: 'Amboss',  data: ambTrackerData, color: COLORS.teal,   valid: ambValid.length },
+    ];
+    const anyData = sources.some(s => s.valid > 0);
+    if (anyData) {
+        const series = sources.map(s => {
+            const buckets = bucketByQuestions(s.data, SCORE_BUCKET_SIZE);
+            const scores = buckets.map(b => b.score);
+            const rolling = scores.map((_, i) => {
+                const w = scores.slice(Math.max(0, i - 4), i + 1).filter(v => v !== null);
+                return w.length > 0 ? (w.reduce((a, b) => a + b, 0) / w.length) : null;
+            });
+            return { ...s, rolling };
         });
-        const ambRolling = ambBucketScores.map((_, i) => {
-            const w = ambBucketScores.slice(Math.max(0, i - 4), i + 1).filter(v => v !== null);
-            return w.length > 0 ? (w.reduce((a, b) => a + b, 0) / w.length) : null;
-        });
-        const maxLen = Math.max(uwRolling.length, ambRolling.length);
+        const maxLen = Math.max(...series.map(s => s.rolling.length), 1);
         const xLabels = Array.from({ length: maxLen }, (_, i) => `Q${i * SCORE_BUCKET_SIZE + 1}–${(i + 1) * SCORE_BUCKET_SIZE}`);
 
         destroyChart('compareScore');
@@ -808,10 +893,15 @@ function renderComparison() {
             type: 'line',
             data: {
                 labels: xLabels,
-                datasets: [
-                    { label: `UWorld (${SCORE_BUCKET_SIZE}Q Rolling Avg)`, data: uwRolling, borderColor: COLORS.blue, borderWidth: 3, pointRadius: 0, fill: false, spanGaps: true },
-                    { label: `Amboss (${SCORE_BUCKET_SIZE}Q Rolling Avg)`, data: ambRolling, borderColor: COLORS.teal, borderWidth: 3, pointRadius: 0, fill: false, spanGaps: true },
-                ]
+                datasets: series.map(s => ({
+                    label: `${s.label} (${SCORE_BUCKET_SIZE}Q Rolling Avg)`,
+                    data: s.rolling,
+                    borderColor: s.color,
+                    borderWidth: 3,
+                    pointRadius: 0,
+                    fill: false,
+                    spanGaps: true,
+                }))
             },
             options: {
                 responsive: true,
@@ -824,8 +914,8 @@ function renderComparison() {
         });
     }
 
-    // Error type comparison chart
-    if (ambLljData.length > 0 && document.getElementById('compare-error-chart')) {
+    // 3-bar error type comparison
+    if (errorComparison.length > 0 && document.getElementById('compare-error-chart')) {
         const errLabels = errorComparison.map(e => e.error);
         destroyChart('compareError');
         charts.compareError = new Chart(document.getElementById('compare-error-chart'), {
@@ -833,8 +923,9 @@ function renderComparison() {
             data: {
                 labels: errLabels,
                 datasets: [
-                    { label: 'UWorld %', data: errorComparison.map(e => e.uwPct), backgroundColor: COLORS.blue + '90', borderRadius: 4 },
-                    { label: 'Amboss %', data: errorComparison.map(e => e.ambPct), backgroundColor: COLORS.teal + '90', borderRadius: 4 },
+                    { label: 'UW (IM) %', data: errorComparison.map(e => parseFloat(e.uwPct.toFixed(1))),  backgroundColor: COLORS.blue   + '90', borderRadius: 4 },
+                    { label: 'SRG %',     data: errorComparison.map(e => parseFloat(e.srgPct.toFixed(1))), backgroundColor: COLORS.orange + '90', borderRadius: 4 },
+                    { label: 'Amboss %',  data: errorComparison.map(e => parseFloat(e.ambPct.toFixed(1))), backgroundColor: COLORS.teal   + '90', borderRadius: 4 },
                 ]
             },
             options: {
@@ -2121,12 +2212,15 @@ document.getElementById('tracker-form').addEventListener('submit', async (e) => 
     const dateFormatted = `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`;
 
     const trackerType = document.getElementById('tracker-qbank-select').value;
+    const shelfEl = document.getElementById('tracker-shelf');
+    const shelfVal = shelfEl ? shelfEl.value : '';
     const entry = {
         type: trackerType === 'amb' ? 'amb-tracker' : 'uw-tracker',
         date: dateFormatted,
         qCompleted: parseInt(document.getElementById('tracker-q-completed').value) || 0,
         pctCorrect: document.getElementById('tracker-pct-correct').value + '%',
         qRemaining: parseInt(document.getElementById('tracker-q-remaining').value) || 0,
+        shelf: shelfVal,
     };
 
     btn.disabled = true;
@@ -2196,32 +2290,38 @@ function renderConclusion(sectionId) {
             break;
         }
         case 'im-tracker': {
-            if (!uwTrackerData.length && !ambTrackerData.length) {
+            const uwImTracker = getUwImTrackerData();
+            const srgTracker = getSrgTrackerData();
+            if (!uwImTracker.length && !ambTrackerData.length && !srgTracker.length) {
                 setConclusion('conclusion-im-tracker', 'Key Takeaway', '<p>No tracker data available yet.</p>');
                 break;
             }
-            const uwValid = uwTrackerData.map(d => d.pctCorrect).filter(v => v !== null);
+            const uwValid  = uwImTracker.map(d => d.pctCorrect).filter(v => v !== null);
             const ambValid = ambTrackerData.map(d => d.pctCorrect).filter(v => v !== null);
-            const uwAvg = uwValid.length ? (uwValid.reduce((a, b) => a + b, 0) / uwValid.length) : 0;
+            const srgValid = srgTracker.map(d => d.pctCorrect).filter(v => v !== null);
+            const uwAvg  = uwValid.length  ? (uwValid.reduce((a, b)  => a + b, 0) / uwValid.length)  : 0;
             const ambAvg = ambValid.length ? (ambValid.reduce((a, b) => a + b, 0) / ambValid.length) : 0;
-            const uwTotal = uwTrackerData.reduce((s, d) => s + d.qCompleted, 0);
+            const srgAvg = srgValid.length ? (srgValid.reduce((a, b) => a + b, 0) / srgValid.length) : 0;
+            const uwTotal  = uwImTracker.reduce((s, d) => s + d.qCompleted, 0);
             const ambTotal = ambTrackerData.reduce((s, d) => s + d.qCompleted, 0);
-            const scoreDiff = ambAvg - uwAvg;
+            const srgTotal = srgTracker.reduce((s, d) => s + d.qCompleted, 0);
 
-            let body = `<p>Across both question banks: <strong>${uwTotal + ambTotal} total questions</strong> completed (${uwTotal} UWorld, ${ambTotal} Amboss).</p>`;
-            if (uwValid.length > 0) body += `<p>UWorld average: <strong>${uwAvg.toFixed(1)}%</strong> over ${uwTrackerData.length} days.</p>`;
-            if (ambValid.length > 0) {
-                body += `<p>Amboss average: <strong>${ambAvg.toFixed(1)}%</strong> over ${ambTrackerData.length} days. `;
+            let body = `<p>Total questions tracked: <strong>${uwTotal + srgTotal + ambTotal}</strong> (${uwTotal} UW IM · ${srgTotal} SRG · ${ambTotal} Amboss).</p>`;
+            if (srgValid.length > 0) {
+                body += `<p><strong>SRG (active block)</strong>: ${srgAvg.toFixed(1)}% over ${srgTracker.length} sessions. `;
                 if (uwValid.length > 0) {
-                    body += scoreDiff > 0
-                        ? `That's <strong>${scoreDiff.toFixed(1)} points higher</strong> than UWorld — the foundation is paying off.`
-                        : scoreDiff < -3
-                        ? `That's ${Math.abs(scoreDiff).toFixed(1)} points lower than UWorld, but Amboss is known to be harder. Check the Comparison tab for weak area analysis.`
-                        : `Essentially on par with UWorld — you're maintaining performance on a different qbank.`;
+                    const diff = srgAvg - uwAvg;
+                    body += diff > 0
+                        ? `Running <strong>${diff.toFixed(1)} points above</strong> your UW (IM) baseline.`
+                        : diff < -3
+                        ? `Running ${Math.abs(diff).toFixed(1)} points below UW (IM) — expected ramp-up on a new shelf.`
+                        : `Holding steady against your UW (IM) baseline.`;
                 }
                 body += '</p>';
             }
-            body += `<div class="takeaway">Use the Comparison tab to see if your UWorld weak areas improved in Amboss, and identify any remaining gaps to target.</div>`;
+            if (uwValid.length > 0) body += `<p><strong>UW (IM)</strong>: ${uwAvg.toFixed(1)}% over ${uwImTracker.length} sessions (frozen — IM exam done).</p>`;
+            if (ambValid.length > 0) body += `<p><strong>Amboss</strong>: ${ambAvg.toFixed(1)}% over ${ambTrackerData.length} sessions${srgTracker.length > 0 ? ' (paused while you complete SRG)' : ''}.</p>`;
+            body += `<div class="takeaway">Use the Compare tab to overlay all three blocks on the same question-count axis and see how SRG is tracking against your prior UW (IM) and Amboss performance.</div>`;
             setConclusion('conclusion-im-tracker', 'Key Takeaway', body);
             break;
         }
