@@ -135,23 +135,24 @@ function parseLLJ(csv, source) {
         }));
 }
 
-function parseTracker(csv) {
+function parseTracker(csv, name) {
     const rows = parseCSV(csv);
     if (!rows.length) return [];
     const headerRow = rows[0] || [];
     const headerJoined = headerRow.join(' ').toLowerCase();
     if (!headerJoined.includes('date') && !headerJoined.includes('completed')) return [];
 
-    // Header-based column mapping so columns can be reordered or include extras like Shelf
+    // Header-based column mapping so columns can be reordered or include extras like Shelf.
+    // Matching is permissive: substring matches handle "Shelf", "Shelf (UW)", "Block/Shelf", etc.
     const colMap = {};
     headerRow.forEach((h, i) => {
         const lc = (h || '').toLowerCase().trim();
         if (!lc) return;
-        if (lc === 'date' || lc.startsWith('date')) { if (colMap.date === undefined) colMap.date = i; }
-        else if (lc.includes('completed') || lc === 'q' || lc === 'questions') { if (colMap.qCompleted === undefined) colMap.qCompleted = i; }
-        else if (lc.includes('correct') || lc.includes('%')) { if (colMap.pctCorrect === undefined) colMap.pctCorrect = i; }
-        else if (lc.includes('remaining')) { if (colMap.qRemaining === undefined) colMap.qRemaining = i; }
-        else if (lc === 'shelf') { colMap.shelf = i; }
+        if (colMap.shelf === undefined && (lc === 'shelf' || lc.includes('shelf') || lc === 'block' || lc === 'subject')) colMap.shelf = i;
+        else if (colMap.date === undefined && (lc === 'date' || lc.startsWith('date'))) colMap.date = i;
+        else if (colMap.qCompleted === undefined && (lc.includes('completed') || lc === 'q' || lc === 'questions' || lc.includes('q done'))) colMap.qCompleted = i;
+        else if (colMap.pctCorrect === undefined && (lc.includes('correct') || lc.includes('%') || lc.includes('score'))) colMap.pctCorrect = i;
+        else if (colMap.qRemaining === undefined && lc.includes('remaining')) colMap.qRemaining = i;
     });
     // Fallback to positional columns if any required header missing
     if (colMap.date === undefined) colMap.date = 0;
@@ -161,7 +162,7 @@ function parseTracker(csv) {
 
     const col = (row, key) => (row[colMap[key]] || '').trim();
 
-    return rows.slice(1)
+    const parsed = rows.slice(1)
         .filter(row => {
             const dateVal = col(row, 'date');
             const qVal = col(row, 'qCompleted');
@@ -179,16 +180,35 @@ function parseTracker(csv) {
             };
         })
         .filter(r => r.qCompleted > 0);
+
+    // Diagnostic logging — surfaces in the browser console so we can verify
+    // the Shelf column is being detected and rows are tagged correctly.
+    const tag = name || 'Tracker';
+    const shelfCounts = parsed.reduce((acc, r) => {
+        const k = r.shelf || '(blank)';
+        acc[k] = (acc[k] || 0) + 1;
+        return acc;
+    }, {});
+    console.log(
+        `parseTracker(${tag}): header="${headerRow.join('","')}" colMap=${JSON.stringify(colMap)} rows=${parsed.length} shelfCounts=${JSON.stringify(shelfCounts)}`
+    );
+    if (parsed.length > 0) console.log(`parseTracker(${tag}): sample row =`, JSON.stringify(parsed[0]));
+
+    return parsed;
 }
 
 // Slice UW Tracker by Shelf so SRG study can be tracked separately from IM history.
-// SRG = rows tagged 'SRG' in the Shelf column. IM = everything else (legacy rows
-// with no shelf are treated as IM since the historical data was IM-only).
+// SRG match is permissive: any row whose Shelf cell starts with "SRG" (e.g. "SRG",
+// "SRG - Surgery", "Srg") counts as SRG. Everything else (including blank legacy
+// rows, since the original UW history was IM-only) goes into the IM bucket.
+function isSrgShelf(s) {
+    return typeof s === 'string' && s.toUpperCase().trim().startsWith('SRG');
+}
 function getUwImTrackerData() {
-    return uwTrackerData.filter(d => d.shelf !== 'SRG');
+    return uwTrackerData.filter(d => !isSrgShelf(d.shelf));
 }
 function getSrgTrackerData() {
-    return uwTrackerData.filter(d => d.shelf === 'SRG');
+    return uwTrackerData.filter(d => isSrgShelf(d.shelf));
 }
 
 async function fetchSheetCSV(name) {
@@ -219,8 +239,8 @@ async function fetchData() {
         rawData = [...uwLlj, ...ambLlj];
 
         // Parse trackers separately
-        uwTrackerData = uwTrackerCsv ? parseTracker(uwTrackerCsv) : [];
-        ambTrackerData = ambTrackerCsv ? parseTracker(ambTrackerCsv) : [];
+        uwTrackerData = uwTrackerCsv ? parseTracker(uwTrackerCsv, 'UW Tracker') : [];
+        ambTrackerData = ambTrackerCsv ? parseTracker(ambTrackerCsv, 'Amb Tracker') : [];
 
         console.log(`Sheets fetched — UW LLJ: ${uwLljCsv ? 'yes' : 'no'}, Amb LLJ: ${ambLljCsv ? 'yes' : 'no'}, UW Tracker: ${uwTrackerCsv ? 'yes' : 'no'}, Amb Tracker: ${ambTrackerCsv ? 'yes' : 'no'}`);
         console.log(`LLJ loaded: ${uwLlj.length} UW + ${ambLlj.length} Amb = ${rawData.length} total`);
