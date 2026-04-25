@@ -50,7 +50,7 @@ let charts = {};
 // SRG cutoff: every UW Tracker row dated on or after this is SRG; before is IM.
 // Used as a fallback when the row has no explicit Shelf tag. Edit this one
 // constant if the SRG study block started on a different date.
-const SRG_START_DATE_STR = '3/22/26';
+const SRG_START_DATE_STR = '3/22/25';
 
 function parseDateStr(s) {
     if (!s) return null;
