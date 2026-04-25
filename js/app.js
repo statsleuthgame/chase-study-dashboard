@@ -54,13 +54,25 @@ const SRG_START_DATE_STR = '3/22/26';
 
 function parseDateStr(s) {
     if (!s) return null;
-    const m = String(s).trim().match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
-    if (!m) return null;
-    const month = parseInt(m[1], 10);
-    const day = parseInt(m[2], 10);
-    let year = m[3] ? parseInt(m[3], 10) : new Date().getFullYear();
-    if (year < 100) year += 2000;
-    return new Date(year, month - 1, day);
+    const trimmed = String(s).trim();
+    if (!trimmed) return null;
+    // Primary: US slash format (M/D/YY, M/D/YYYY, MM/DD/YY, MM/DD/YYYY)
+    const slash = trimmed.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+    if (slash) {
+        const month = parseInt(slash[1], 10);
+        const day = parseInt(slash[2], 10);
+        let year = slash[3] ? parseInt(slash[3], 10) : new Date().getFullYear();
+        if (year < 100) year += 2000;
+        return new Date(year, month - 1, day);
+    }
+    // Secondary: ISO format (YYYY-MM-DD) — what Sheets exports if cell is a Date type
+    const iso = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (iso) {
+        return new Date(parseInt(iso[1], 10), parseInt(iso[2], 10) - 1, parseInt(iso[3], 10));
+    }
+    // Fallback: let Date parse it (handles "March 22, 2026", "22 Mar 2026", etc.)
+    const d = new Date(trimmed);
+    return isNaN(d.getTime()) ? null : d;
 }
 
 const SRG_START_DATE = parseDateStr(SRG_START_DATE_STR);
@@ -213,10 +225,22 @@ function parseTracker(csv, name, applySrgDateRule) {
     // SRG classification is happening as expected.
     const tag = name || 'Tracker';
     const srgCount = parsed.filter(r => r.isSrg).length;
+    const unparsedDates = parsed.filter(r => !r.parsedDate).length;
     console.log(
-        `parseTracker(${tag}): rows=${parsed.length} srg=${srgCount} im=${parsed.length - srgCount} colMap=${JSON.stringify(colMap)} cutoff=${applySrgDateRule ? SRG_START_DATE_STR : 'n/a'}`
+        `parseTracker(${tag}): rows=${parsed.length} srg=${srgCount} im=${parsed.length - srgCount} unparsedDates=${unparsedDates} cutoff=${applySrgDateRule ? SRG_START_DATE_STR : 'n/a'}`
     );
-    if (parsed.length > 0) console.log(`parseTracker(${tag}): first=${JSON.stringify({date: parsed[0].date, isSrg: parsed[0].isSrg})} last=${JSON.stringify({date: parsed[parsed.length-1].date, isSrg: parsed[parsed.length-1].isSrg})}`);
+    if (parsed.length > 0) {
+        const fmt = r => ({ date: r.date, parsed: r.parsedDate ? r.parsedDate.toISOString().slice(0, 10) : null, isSrg: r.isSrg, q: r.qCompleted });
+        console.log(`parseTracker(${tag}): first=${JSON.stringify(fmt(parsed[0]))}`);
+        console.log(`parseTracker(${tag}): last=${JSON.stringify(fmt(parsed[parsed.length-1]))}`);
+        // Print the first row that crosses the SRG boundary so we can verify the cutoff is firing
+        if (applySrgDateRule) {
+            const firstSrg = parsed.find(r => r.isSrg);
+            const lastIm = [...parsed].reverse().find(r => !r.isSrg);
+            console.log(`parseTracker(${tag}): first SRG row=${firstSrg ? JSON.stringify(fmt(firstSrg)) : 'NONE'}`);
+            console.log(`parseTracker(${tag}): last IM row=${lastIm ? JSON.stringify(fmt(lastIm)) : 'NONE'}`);
+        }
+    }
 
     return parsed;
 }
