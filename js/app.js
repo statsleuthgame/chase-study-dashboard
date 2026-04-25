@@ -47,6 +47,24 @@ let uwTrackerData = [];
 let ambTrackerData = [];
 let charts = {};
 
+// SRG cutoff: every UW Tracker row dated on or after this is SRG; before is IM.
+// Used as a fallback when the row has no explicit Shelf tag. Edit this one
+// constant if the SRG study block started on a different date.
+const SRG_START_DATE_STR = '3/22/26';
+
+function parseDateStr(s) {
+    if (!s) return null;
+    const m = String(s).trim().match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+    if (!m) return null;
+    const month = parseInt(m[1], 10);
+    const day = parseInt(m[2], 10);
+    let year = m[3] ? parseInt(m[3], 10) : new Date().getFullYear();
+    if (year < 100) year += 2000;
+    return new Date(year, month - 1, day);
+}
+
+const SRG_START_DATE = parseDateStr(SRG_START_DATE_STR);
+
 // ============================================================
 // Data Fetching & Parsing
 // ============================================================
@@ -135,7 +153,7 @@ function parseLLJ(csv, source) {
         }));
 }
 
-function parseTracker(csv, name) {
+function parseTracker(csv, name, applySrgDateRule) {
     const rows = parseCSV(csv);
     if (!rows.length) return [];
     const headerRow = rows[0] || [];
@@ -171,44 +189,45 @@ function parseTracker(csv, name) {
         .map(row => {
             const pctStr = col(row, 'pctCorrect').replace(/%/g, '').replace(/[—–-]/g, '').trim();
             const pct = pctStr && !isNaN(parseFloat(pctStr)) ? parseFloat(pctStr) : null;
+            const dateStr = col(row, 'date');
+            const parsedDate = parseDateStr(dateStr);
+            const shelfFromCol = colMap.shelf !== undefined ? col(row, 'shelf').toUpperCase() : '';
+            // SRG classification: explicit Shelf tag wins; otherwise fall back to date cutoff
+            // (only for sources where the SRG date rule applies, e.g. UW Tracker).
+            const isSrgByShelf = shelfFromCol && shelfFromCol.startsWith('SRG');
+            const isSrgByDate = applySrgDateRule && SRG_START_DATE && parsedDate && parsedDate >= SRG_START_DATE;
+            const isSrg = isSrgByShelf || (!shelfFromCol && isSrgByDate);
             return {
-                date: col(row, 'date'),
+                date: dateStr,
+                parsedDate,
                 qCompleted: parseInt(col(row, 'qCompleted')) || 0,
                 pctCorrect: pct,
                 qRemaining: parseInt(col(row, 'qRemaining')) || 0,
-                shelf: colMap.shelf !== undefined ? col(row, 'shelf').toUpperCase() : '',
+                shelf: shelfFromCol,
+                isSrg,
             };
         })
         .filter(r => r.qCompleted > 0);
 
     // Diagnostic logging — surfaces in the browser console so we can verify
-    // the Shelf column is being detected and rows are tagged correctly.
+    // SRG classification is happening as expected.
     const tag = name || 'Tracker';
-    const shelfCounts = parsed.reduce((acc, r) => {
-        const k = r.shelf || '(blank)';
-        acc[k] = (acc[k] || 0) + 1;
-        return acc;
-    }, {});
+    const srgCount = parsed.filter(r => r.isSrg).length;
     console.log(
-        `parseTracker(${tag}): header="${headerRow.join('","')}" colMap=${JSON.stringify(colMap)} rows=${parsed.length} shelfCounts=${JSON.stringify(shelfCounts)}`
+        `parseTracker(${tag}): rows=${parsed.length} srg=${srgCount} im=${parsed.length - srgCount} colMap=${JSON.stringify(colMap)} cutoff=${applySrgDateRule ? SRG_START_DATE_STR : 'n/a'}`
     );
-    if (parsed.length > 0) console.log(`parseTracker(${tag}): sample row =`, JSON.stringify(parsed[0]));
+    if (parsed.length > 0) console.log(`parseTracker(${tag}): first=${JSON.stringify({date: parsed[0].date, isSrg: parsed[0].isSrg})} last=${JSON.stringify({date: parsed[parsed.length-1].date, isSrg: parsed[parsed.length-1].isSrg})}`);
 
     return parsed;
 }
 
-// Slice UW Tracker by Shelf so SRG study can be tracked separately from IM history.
-// SRG match is permissive: any row whose Shelf cell starts with "SRG" (e.g. "SRG",
-// "SRG - Surgery", "Srg") counts as SRG. Everything else (including blank legacy
-// rows, since the original UW history was IM-only) goes into the IM bucket.
-function isSrgShelf(s) {
-    return typeof s === 'string' && s.toUpperCase().trim().startsWith('SRG');
-}
+// Slice UW Tracker by SRG classification (explicit shelf tag OR date cutoff).
+// IM bucket = everything that isn't SRG (preserves the historical UW-as-IM data).
 function getUwImTrackerData() {
-    return uwTrackerData.filter(d => !isSrgShelf(d.shelf));
+    return uwTrackerData.filter(d => !d.isSrg);
 }
 function getSrgTrackerData() {
-    return uwTrackerData.filter(d => isSrgShelf(d.shelf));
+    return uwTrackerData.filter(d => d.isSrg);
 }
 
 async function fetchSheetCSV(name) {
@@ -239,8 +258,8 @@ async function fetchData() {
         rawData = [...uwLlj, ...ambLlj];
 
         // Parse trackers separately
-        uwTrackerData = uwTrackerCsv ? parseTracker(uwTrackerCsv, 'UW Tracker') : [];
-        ambTrackerData = ambTrackerCsv ? parseTracker(ambTrackerCsv, 'Amb Tracker') : [];
+        uwTrackerData = uwTrackerCsv ? parseTracker(uwTrackerCsv, 'UW Tracker', true) : [];
+        ambTrackerData = ambTrackerCsv ? parseTracker(ambTrackerCsv, 'Amb Tracker', false) : [];
 
         console.log(`Sheets fetched — UW LLJ: ${uwLljCsv ? 'yes' : 'no'}, Amb LLJ: ${ambLljCsv ? 'yes' : 'no'}, UW Tracker: ${uwTrackerCsv ? 'yes' : 'no'}, Amb Tracker: ${ambTrackerCsv ? 'yes' : 'no'}`);
         console.log(`LLJ loaded: ${uwLlj.length} UW + ${ambLlj.length} Amb = ${rawData.length} total`);
